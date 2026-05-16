@@ -25,10 +25,11 @@
       <br>
 
       <label>Match position</label>
-      <select id="position">
-        <option value="prefix">Start of wallet</option>
-        <option value="suffix">End of wallet</option>
-      </select>
+     <select id="position">
+  <option value="prefix">Start of wallet</option>
+  <option value="suffix">End of wallet</option>
+  <option value="both">Start OR end of wallet</option>
+</select>
 
       <br><br>
 
@@ -157,7 +158,7 @@ Anyone with this key has full access to your wallet.
     <div class="status-searching">
       Starting search with ${o} workers...
     </div>
-  `;for(let a=0;a<o;a++){let a=new Worker(new URL(``+new URL(`walletWorker-BxY1PCA0.js`,import.meta.url).href,``+import.meta.url),{type:`module`});a.onmessage=i=>{if(n&&(i.data.type===`attempt`&&(r++,r%1e3==0&&A(o)),i.data.type===`found`)){let n=i.data.publicKey,a=i.data.privateKey,s=new Uint8Array(i.data.secretKey);y();let c=S();w({publicKey:n,pattern:e,position:t,attempts:r,speed:c,createdAt:new Date().toLocaleString()}),d.innerHTML=`
+  `;for(let a=0;a<o;a++){let a=new Worker(new URL(``+new URL(`walletWorker-YOuT0WfW.js`,import.meta.url).href,``+import.meta.url),{type:`module`});a.onmessage=i=>{if(n&&(i.data.type===`attempt`&&(r++,r%1e3==0&&A(o)),i.data.type===`found`)){let n=i.data.publicKey,a=i.data.privateKey,s=new Uint8Array(i.data.secretKey);y();let c=S();w({publicKey:n,pattern:e,position:t,attempts:r,speed:c,createdAt:new Date().toLocaleString()}),d.innerHTML=`
           <div class="status-found">
             <strong>MATCH FOUND</strong>
 
