@@ -1,5 +1,6 @@
 import './style.css'
 import banner from './assets/banner.png'
+import { testKitGrind } from './kitTest'
 
 const app = document.querySelector<HTMLDivElement>('#app')
 
@@ -710,3 +711,4 @@ startBtn?.addEventListener('click', () => {
 
 renderRecentWallets()
 renderPatternFields()
+testKitGrind()

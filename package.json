@@ -14,6 +14,7 @@
     "vite": "^8.0.12"
   },
   "dependencies": {
+    "@solana/keys": "^6.9.0",
     "@solana/web3.js": "^1.98.4",
     "bs58": "^6.0.0"
   }
