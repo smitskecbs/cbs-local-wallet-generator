@@ -20,8 +20,10 @@ type RecentWallet = {
   publicKey: string
   pattern: string
   position: string
-  attempts: number
-  speed: number
+  attempts?: number
+  speed?: number
+  elapsed?: number
+  engine?: string
   createdAt: string
 }
 
@@ -71,9 +73,15 @@ app.innerHTML = `
 
       <label>Engine</label>
       <select id="engine">
-        <option value="web3" selected>web3.js</option>
-        <option value="kit">Solana Kit</option>
+        <option value="kit" selected>Solana Kit</option>
+        <option value="web3">web3.js (Legacy)</option>
       </select>
+
+      <div class="engine-info">
+        <strong>Engine info</strong><br>
+        Solana Kit is the modern default engine.<br>
+        web3.js is kept as legacy fallback mode.
+      </div>
 
       <br><br>
 
@@ -126,6 +134,20 @@ const recentWallets = document.getElementById('recentWallets')
 const clearRecentBtn = document.getElementById('clearRecentBtn')
 const estimateBox = document.getElementById('estimateBox')
 const advancedWarning = document.getElementById('advancedWarning')
+
+function isKitEngineValue(engine?: string) {
+  const value = (engine || '').toLowerCase()
+
+  return (
+    value === 'kit' ||
+    value === 'solana-kit' ||
+    value === 'solana kit'
+  )
+}
+
+function getEngineLabel(engine?: string) {
+  return isKitEngineValue(engine) ? 'Kit' : 'web3.js'
+}
 
 function renderPatternFields() {
   const position = positionSelect.value
@@ -240,6 +262,15 @@ function renderRecentWallets() {
 
   recentWallets!.innerHTML = wallets
     .map((wallet) => {
+      const isKitWallet = isKitEngineValue(wallet.engine)
+
+      const walletStats = isKitWallet
+        ? `Elapsed: ${(wallet.elapsed || 0).toFixed(2)}s<br>`
+        : `
+          Attempts: ${wallet.attempts || 0}<br>
+          Speed: ${wallet.speed || 0} wallets/sec<br>
+        `
+
       return `
         <div class="wallet-box">
           <div class="wallet-title">
@@ -252,8 +283,8 @@ function renderRecentWallets() {
 
           <br>
 
-          Attempts: ${wallet.attempts}<br>
-          Speed: ${wallet.speed} wallets/sec<br>
+          Engine: ${getEngineLabel(wallet.engine)}<br>
+          ${walletStats}
           Date: ${wallet.createdAt}
 
           <br><br>
@@ -410,6 +441,8 @@ function updateEstimate() {
 
 function updateStatus(workerCount: number) {
   const speed = getSpeed()
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+  const isKit = engineSelect.value === 'kit'
 
   status!.innerHTML = `
     <div class="status-searching">
@@ -419,22 +452,42 @@ function updateStatus(workerCount: number) {
 
       <div class="stat-grid">
         <div class="stat-box">
+          <div class="stat-title">Engine</div>
+          <div class="stat-value">${isKit ? 'Kit' : 'web3.js'}</div>
+        </div>
+
+        <div class="stat-box">
           <div class="stat-title">Workers</div>
           <div class="stat-value">${workerCount}</div>
         </div>
 
-        <div class="stat-box">
-          <div class="stat-title">Attempts</div>
-          <div class="stat-value">${attempts}</div>
-        </div>
+        ${
+          isKit
+            ? `
+              <div class="stat-box">
+                <div class="stat-title">Elapsed</div>
+                <div class="stat-value">${elapsed}s</div>
+              </div>
+            `
+            : `
+              <div class="stat-box">
+                <div class="stat-title">Attempts</div>
+                <div class="stat-value">${attempts}</div>
+              </div>
 
-        <div class="stat-box">
-          <div class="stat-title">Speed</div>
-          <div class="stat-value">${speed}</div>
-        </div>
+              <div class="stat-box">
+                <div class="stat-title">Speed</div>
+                <div class="stat-value">${speed}</div>
+              </div>
+            `
+        }
       </div>
 
-      wallets/sec
+      ${
+        isKit
+          ? 'Searching for vanity address with Solana Kit...'
+          : 'wallets/sec'
+      }
     </div>
   `
 
@@ -578,11 +631,18 @@ startBtn?.addEventListener('click', () => {
   attempts = 0
   startTime = Date.now()
 
-  status!.innerHTML = `
-    <div class="status-searching">
-      Starting search with ${workerCount} workers...
-    </div>
-  `
+  if (engineSelect.value === 'kit') {
+    const interval = setInterval(() => {
+      if (!isSearching) {
+        clearInterval(interval)
+        return
+      }
+
+      updateStatus(workerCount)
+    }, 100)
+  }
+
+  updateStatus(workerCount)
 
   for (let i = 0; i < workerCount; i++) {
     let worker: Worker
@@ -630,17 +690,18 @@ startBtn?.addEventListener('click', () => {
             ? pattern + '...' + endPattern
             : pattern
 
+        const isKitEngine = isKitEngineValue(engine)
+
         saveRecentWallet({
           publicKey,
           pattern: savedPattern,
           position,
-          attempts,
-          speed,
+          engine: isKitEngine ? 'Kit' : 'web3.js',
+          attempts: isKitEngine ? undefined : attempts,
+          speed: isKitEngine ? undefined : speed,
+          elapsed: isKitEngine ? kitSeconds : undefined,
           createdAt: new Date().toLocaleString(),
         })
-
-        const isKitEngine =
-          engine === 'solana-kit' || engine === 'kit'
 
         status!.innerHTML = `
           <div class="status-found">
