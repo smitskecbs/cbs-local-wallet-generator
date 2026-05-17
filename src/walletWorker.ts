@@ -3,11 +3,15 @@ import bs58 from 'bs58'
 
 self.onmessage = (event) => {
   const pattern = event.data.pattern
+  const endPattern = event.data.endPattern
   const position = event.data.position
   const ignoreCase = event.data.ignoreCase
 
   const searchPattern =
     ignoreCase ? pattern.toLowerCase() : pattern
+
+  const searchEndPattern =
+    ignoreCase ? endPattern.toLowerCase() : endPattern
 
   while (true) {
     const keypair = Keypair.generate()
@@ -26,7 +30,12 @@ self.onmessage = (event) => {
       (position === 'suffix' || position === 'both') &&
       searchablePublicKey.endsWith(searchPattern)
 
-    if (matchesPrefix || matchesSuffix) {
+    const matchesBothEnds =
+      position === 'bothEnds' &&
+      searchablePublicKey.startsWith(searchPattern) &&
+      searchablePublicKey.endsWith(searchEndPattern)
+
+    if (matchesPrefix || matchesSuffix || matchesBothEnds) {
       self.postMessage({
         type: 'found',
         publicKey,

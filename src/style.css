@@ -241,3 +241,20 @@ strong {
   font-weight: bold;
   cursor: pointer;
 }
+.footer {
+  text-align: center;
+  margin: 36px auto 0;
+  color: #555;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.footer a {
+  color: #d86f00;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}

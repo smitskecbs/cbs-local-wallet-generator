@@ -32,16 +32,32 @@ app.innerHTML = `
     </div>
 
     <div class="card">
-      <label>Pattern</label>
-      <input id="pattern" maxlength="5" placeholder="Example: CBS" />
+      <div class="import-box">
+        <strong>Safety notice</strong><br><br>
+        This tool generates Solana wallets locally in your browser.<br>
+        No backend. No cloud key storage. Private keys stay on your device.<br><br>
+        Always back up your private key offline. Never share your private key.
+      </div>
+
+      <br>
+
+      <label>Match position</label>
+      <select id="position">
+        <option value="prefix">Start of wallet</option>
+        <option value="suffix">End of wallet</option>
+        <option value="both">Start OR end of wallet</option>
+        <option value="bothEnds">Start AND end of wallet</option>
+      </select>
+
+      <div id="patternFields"></div>
 
       <div class="checkbox-row">
-  <input id="ignoreCase" type="checkbox" />
+        <input id="ignoreCase" type="checkbox" />
 
-  <label for="ignoreCase">
-    Ignore letter casing
-  </label>
-</div>
+        <label for="ignoreCase">
+          Ignore letter casing
+        </label>
+      </div>
 
       <p>Invalid characters: 0 O I l</p>
 
@@ -49,16 +65,12 @@ app.innerHTML = `
         Enter a pattern to see estimated difficulty.
       </div>
 
+      <div id="advancedWarning" class="advanced-warning hidden">
+        ⚠ Start AND end mode is extremely difficult and CPU intensive.
+        Use short patterns first.
+      </div>
+
       <br>
-
-      <label>Match position</label>
-     <select id="position">
-  <option value="prefix">Start of wallet</option>
-  <option value="suffix">End of wallet</option>
-  <option value="both">Start OR end of wallet</option>
-</select>
-
-      <br><br>
 
       <label>Workers</label>
       <select id="workerCount">
@@ -81,24 +93,92 @@ app.innerHTML = `
       <div id="status">Waiting...</div>
     </div>
 
-    <div class="card">
+      <div class="card">
       <h2>Recent Found Wallets</h2>
       <div id="recentWallets">No recent wallets yet.</div>
       <button id="clearRecentBtn">Clear Recent Wallets</button>
     </div>
+
+    <footer class="footer">
+      Built locally in your browser • No backend • No cloud key storage<br>
+      Open source on
+      <a
+        href="https://github.com/smitskecbs/cbs-local-wallet-generator"
+        target="_blank"
+      >
+        GitHub
+      </a>
+    </footer>
   </div>
 `
 
 const startBtn = document.getElementById('startBtn')
 const stopBtn = document.getElementById('stopBtn')
 const status = document.getElementById('status')
-const patternInput = document.getElementById('pattern') as HTMLInputElement
-const ignoreCaseInput = document.getElementById('ignoreCase') as HTMLInputElement
 const positionSelect = document.getElementById('position') as HTMLSelectElement
 const workerCountSelect = document.getElementById('workerCount') as HTMLSelectElement
+const ignoreCaseInput = document.getElementById('ignoreCase') as HTMLInputElement
+const patternFields = document.getElementById('patternFields')
 const recentWallets = document.getElementById('recentWallets')
 const clearRecentBtn = document.getElementById('clearRecentBtn')
 const estimateBox = document.getElementById('estimateBox')
+const advancedWarning = document.getElementById('advancedWarning')
+
+function renderPatternFields() {
+  const position = positionSelect.value
+
+  if (position === 'prefix') {
+    patternFields!.innerHTML = `
+      <label>Start pattern</label>
+      <input id="pattern" maxlength="5" placeholder="Example: CBS" />
+    `
+  }
+
+  if (position === 'suffix') {
+    patternFields!.innerHTML = `
+      <label>End pattern</label>
+      <input id="pattern" maxlength="5" placeholder="Example: BONK" />
+    `
+  }
+
+  if (position === 'both') {
+    patternFields!.innerHTML = `
+      <label>Pattern</label>
+      <input id="pattern" maxlength="5" placeholder="Example: SOL" />
+    `
+  }
+
+  if (position === 'bothEnds') {
+    patternFields!.innerHTML = `
+      <label>Start pattern</label>
+      <input id="pattern" maxlength="5" placeholder="Example: CBS" />
+
+      <label>End pattern</label>
+      <input id="endPattern" maxlength="5" placeholder="Example: SOL" />
+    `
+  }
+
+  getPatternInput()?.addEventListener('input', updateEstimate)
+  getEndPatternInput()?.addEventListener('input', updateEstimate)
+
+  updateEstimate()
+}
+
+function getPatternInput() {
+  return document.getElementById('pattern') as HTMLInputElement | null
+}
+
+function getEndPatternInput() {
+  return document.getElementById('endPattern') as HTMLInputElement | null
+}
+
+function getPatternValue() {
+  return getPatternInput()?.value.trim() || ''
+}
+
+function getEndPatternValue() {
+  return getEndPatternInput()?.value.trim() || ''
+}
 
 function stopWorkers() {
   isSearching = false
@@ -195,11 +275,21 @@ function renderRecentWallets() {
 }
 
 function getDifficulty(averageAttempts: number) {
-  if (averageAttempts < 500) return 'Very easy'
-  if (averageAttempts < 10000) return 'Easy'
-  if (averageAttempts < 500000) return 'Medium'
-  if (averageAttempts < 20000000) return 'Hard'
-  return 'Very hard'
+  if (averageAttempts < 500) return 'Common'
+  if (averageAttempts < 10000) return 'Uncommon'
+  if (averageAttempts < 500000) return 'Rare'
+  if (averageAttempts < 20000000) return 'Epic'
+  if (averageAttempts < 2000000000) return 'Legendary'
+  return 'Insane'
+}
+
+function getDifficultyEmoji(difficulty: string) {
+  if (difficulty === 'Common') return '⚪'
+  if (difficulty === 'Uncommon') return '🟢'
+  if (difficulty === 'Rare') return '🔵'
+  if (difficulty === 'Epic') return '🟣'
+  if (difficulty === 'Legendary') return '🟡'
+  return '🔥'
 }
 
 function formatEstimatedTime(seconds: number) {
@@ -213,7 +303,10 @@ function formatEstimatedTime(seconds: number) {
   if (hours < 24) return Math.round(hours * 10) / 10 + ' hours'
 
   const days = hours / 24
-  return Math.round(days * 10) / 10 + ' days'
+  if (days < 365) return Math.round(days * 10) / 10 + ' days'
+
+  const years = days / 365
+  return Math.round(years * 10) / 10 + ' years'
 }
 
 function getCaseMultiplier(pattern: string, ignoreCase: boolean) {
@@ -228,11 +321,7 @@ function getCaseMultiplier(pattern: string, ignoreCase: boolean) {
     const lowerAllowed = !blockedCharacters.includes(lower)
     const upperAllowed = !blockedCharacters.includes(upper)
 
-    if (
-      lower !== upper &&
-      lowerAllowed &&
-      upperAllowed
-    ) {
+    if (lower !== upper && lowerAllowed && upperAllowed) {
       multiplier *= 2
     }
   }
@@ -240,9 +329,21 @@ function getCaseMultiplier(pattern: string, ignoreCase: boolean) {
   return multiplier
 }
 
+function updateAdvancedWarning() {
+  if (positionSelect.value === 'bothEnds') {
+    advancedWarning!.classList.remove('hidden')
+  } else {
+    advancedWarning!.classList.add('hidden')
+  }
+}
+
 function updateEstimate() {
-  const pattern = patternInput.value.trim()
+  const pattern = getPatternValue()
+  const endPattern = getEndPatternValue()
+  const position = positionSelect.value
   const ignoreCase = ignoreCaseInput.checked
+
+  updateAdvancedWarning()
 
   if (!pattern) {
     estimateBox!.innerHTML =
@@ -250,8 +351,11 @@ function updateEstimate() {
     return
   }
 
-  if (hasBlockedCharacters(pattern)) {
-    const invalidCharacters = getBlockedCharacters(pattern).join(', ')
+  if (hasBlockedCharacters(pattern) || hasBlockedCharacters(endPattern)) {
+    const invalidCharacters = [
+      ...getBlockedCharacters(pattern),
+      ...getBlockedCharacters(endPattern),
+    ].join(', ')
 
     estimateBox!.innerHTML = `
       <strong>Invalid pattern</strong><br>
@@ -260,16 +364,43 @@ function updateEstimate() {
     return
   }
 
-  const exactAttempts = Math.pow(58, pattern.length)
-  const caseMultiplier = getCaseMultiplier(pattern, ignoreCase)
-  const averageAttempts = Math.round(exactAttempts / caseMultiplier)
+  if (position === 'bothEnds' && !endPattern) {
+    estimateBox!.innerHTML = `
+      <strong>Start AND end mode</strong><br>
+      Enter both a start pattern and an end pattern.<br><br>
+      Example: start = CBS, end = SOL
+    `
+    return
+  }
+
+  let totalLength = pattern.length
+  let caseMultiplier = getCaseMultiplier(pattern, ignoreCase)
+  let matchMultiplier = 1
+
+  if (position === 'both') {
+    matchMultiplier = 2
+  }
+
+  if (position === 'bothEnds') {
+    totalLength = pattern.length + endPattern.length
+    caseMultiplier =
+      getCaseMultiplier(pattern, ignoreCase) *
+      getCaseMultiplier(endPattern, ignoreCase)
+    matchMultiplier = 1
+  }
+
+  const exactAttempts = Math.pow(58, totalLength)
+  const averageAttempts = Math.round(
+    exactAttempts / caseMultiplier / matchMultiplier
+  )
 
   const speed = lastMeasuredSpeed > 0 ? lastMeasuredSpeed : 50000
   const estimatedSeconds = averageAttempts / speed
   const difficulty = getDifficulty(averageAttempts)
+  const difficultyEmoji = getDifficultyEmoji(difficulty)
 
   estimateBox!.innerHTML = `
-    <strong>Estimated difficulty:</strong> ${difficulty}<br>
+    <strong>Rarity:</strong> ${difficultyEmoji} ${difficulty}<br>
     <strong>Average attempts:</strong> ${averageAttempts.toLocaleString()}<br>
     <strong>Estimated average time:</strong> ${formatEstimatedTime(estimatedSeconds)}<br>
     <small>This is an average estimate. It can be found much faster or much slower.</small>
@@ -375,7 +506,10 @@ function downloadJsonKeypair(secretKey: Uint8Array, publicKey: string) {
   URL.revokeObjectURL(url)
 }
 
-patternInput.addEventListener('input', updateEstimate)
+positionSelect.addEventListener('change', () => {
+  renderPatternFields()
+})
+
 ignoreCaseInput.addEventListener('change', updateEstimate)
 workerCountSelect.addEventListener('change', updateEstimate)
 
@@ -395,7 +529,8 @@ stopBtn?.addEventListener('click', () => {
 })
 
 startBtn?.addEventListener('click', () => {
-  const pattern = patternInput.value.trim()
+  const pattern = getPatternValue()
+  const endPattern = getEndPatternValue()
   const position = positionSelect.value
   const workerCount = getWorkerCount()
   const ignoreCase = ignoreCaseInput.checked
@@ -409,8 +544,20 @@ startBtn?.addEventListener('click', () => {
     return
   }
 
-  if (hasBlockedCharacters(pattern)) {
-    const invalidCharacters = getBlockedCharacters(pattern).join(', ')
+  if (position === 'bothEnds' && !endPattern) {
+    status!.innerHTML = `
+      <div class="status-searching">
+        Please enter an end pattern for Start AND end mode.
+      </div>
+    `
+    return
+  }
+
+  if (hasBlockedCharacters(pattern) || hasBlockedCharacters(endPattern)) {
+    const invalidCharacters = [
+      ...getBlockedCharacters(pattern),
+      ...getBlockedCharacters(endPattern),
+    ].join(', ')
 
     status!.innerHTML = `
       <div class="status-searching">
@@ -463,9 +610,14 @@ startBtn?.addEventListener('click', () => {
 
         const speed = getSpeed()
 
+        const savedPattern =
+          position === 'bothEnds'
+            ? pattern + '...' + endPattern
+            : pattern
+
         saveRecentWallet({
           publicKey,
-          pattern,
+          pattern: savedPattern,
           position,
           attempts,
           speed,
@@ -547,6 +699,7 @@ startBtn?.addEventListener('click', () => {
 
     worker.postMessage({
       pattern,
+      endPattern,
       position,
       ignoreCase,
     })
@@ -556,4 +709,4 @@ startBtn?.addEventListener('click', () => {
 })
 
 renderRecentWallets()
-updateEstimate()
+renderPatternFields()
