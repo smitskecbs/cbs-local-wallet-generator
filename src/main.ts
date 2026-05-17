@@ -1,6 +1,5 @@
 import './style.css'
 import banner from './assets/banner.png'
-import { testKitGrind } from './kitTest'
 
 const app = document.querySelector<HTMLDivElement>('#app')
 
@@ -54,10 +53,7 @@ app.innerHTML = `
 
       <div class="checkbox-row">
         <input id="ignoreCase" type="checkbox" />
-
-        <label for="ignoreCase">
-          Ignore letter casing
-        </label>
+        <label for="ignoreCase">Ignore letter casing</label>
       </div>
 
       <p>Invalid characters: 0 O I l</p>
@@ -72,6 +68,14 @@ app.innerHTML = `
       </div>
 
       <br>
+
+      <label>Engine</label>
+      <select id="engine">
+        <option value="web3" selected>web3.js</option>
+        <option value="kit">Solana Kit</option>
+      </select>
+
+      <br><br>
 
       <label>Workers</label>
       <select id="workerCount">
@@ -94,7 +98,7 @@ app.innerHTML = `
       <div id="status">Waiting...</div>
     </div>
 
-      <div class="card">
+    <div class="card">
       <h2>Recent Found Wallets</h2>
       <div id="recentWallets">No recent wallets yet.</div>
       <button id="clearRecentBtn">Clear Recent Wallets</button>
@@ -103,10 +107,7 @@ app.innerHTML = `
     <footer class="footer">
       Built locally in your browser • No backend • No cloud key storage<br>
       Open source on
-      <a
-        href="https://github.com/smitskecbs/cbs-local-wallet-generator"
-        target="_blank"
-      >
+      <a href="https://github.com/smitskecbs/cbs-local-wallet-generator" target="_blank">
         GitHub
       </a>
     </footer>
@@ -118,6 +119,7 @@ const stopBtn = document.getElementById('stopBtn')
 const status = document.getElementById('status')
 const positionSelect = document.getElementById('position') as HTMLSelectElement
 const workerCountSelect = document.getElementById('workerCount') as HTMLSelectElement
+const engineSelect = document.getElementById('engine') as HTMLSelectElement
 const ignoreCaseInput = document.getElementById('ignoreCase') as HTMLInputElement
 const patternFields = document.getElementById('patternFields')
 const recentWallets = document.getElementById('recentWallets')
@@ -347,8 +349,7 @@ function updateEstimate() {
   updateAdvancedWarning()
 
   if (!pattern) {
-    estimateBox!.innerHTML =
-      'Enter a pattern to see estimated difficulty.'
+    estimateBox!.innerHTML = 'Enter a pattern to see estimated difficulty.'
     return
   }
 
@@ -387,7 +388,6 @@ function updateEstimate() {
     caseMultiplier =
       getCaseMultiplier(pattern, ignoreCase) *
       getCaseMultiplier(endPattern, ignoreCase)
-    matchMultiplier = 1
   }
 
   const exactAttempts = Math.pow(58, totalLength)
@@ -467,7 +467,7 @@ function downloadWalletBackup(publicKey: string, privateKey: string) {
     privateKey +
     '\n\n==============================\n\n' +
     'IMPORT INSTRUCTIONS:\n' +
-    '1. Open Phantom or Solflare.\n' +
+    '1. Open Phantom, Solflare, Backpack or another Solana wallet.\n' +
     '2. Choose Add / Import Wallet.\n' +
     '3. Choose Private Key.\n' +
     '4. Paste the private key.\n' +
@@ -513,6 +513,7 @@ positionSelect.addEventListener('change', () => {
 
 ignoreCaseInput.addEventListener('change', updateEstimate)
 workerCountSelect.addEventListener('change', updateEstimate)
+engineSelect.addEventListener('change', updateEstimate)
 
 clearRecentBtn?.addEventListener('click', () => {
   localStorage.removeItem(recentWalletsKey)
@@ -584,12 +585,19 @@ startBtn?.addEventListener('click', () => {
   `
 
   for (let i = 0; i < workerCount; i++) {
-    const worker = new Worker(
-      new URL('./walletWorker.ts', import.meta.url),
-      {
-        type: 'module',
-      }
-    )
+    let worker: Worker
+
+    if (engineSelect.value === 'kit') {
+      worker = new Worker(
+        new URL('./kitWorker.ts', import.meta.url),
+        { type: 'module' }
+      )
+    } else {
+      worker = new Worker(
+        new URL('./walletWorker.ts', import.meta.url),
+        { type: 'module' }
+      )
+    }
 
     worker.onmessage = (event) => {
       if (!isSearching) return
@@ -602,10 +610,16 @@ startBtn?.addEventListener('click', () => {
         }
       }
 
+      if (event.data.type === 'started') {
+        return
+      }
+
       if (event.data.type === 'found') {
         const publicKey = event.data.publicKey
         const privateKey = event.data.privateKey
         const secretKey = new Uint8Array(event.data.secretKey)
+        const engine = event.data.engine || engineSelect.value
+        const kitSeconds = event.data.seconds || 0
 
         stopWorkers()
 
@@ -625,6 +639,9 @@ startBtn?.addEventListener('click', () => {
           createdAt: new Date().toLocaleString(),
         })
 
+        const isKitEngine =
+          engine === 'solana-kit' || engine === 'kit'
+
         status!.innerHTML = `
           <div class="status-found">
             <strong>MATCH FOUND</strong>
@@ -633,19 +650,35 @@ startBtn?.addEventListener('click', () => {
 
             <div class="stat-grid">
               <div class="stat-box">
+                <div class="stat-title">Engine</div>
+                <div class="stat-value">${isKitEngine ? 'Kit' : 'web3.js'}</div>
+              </div>
+
+              <div class="stat-box">
                 <div class="stat-title">Workers</div>
                 <div class="stat-value">${workerCount}</div>
               </div>
 
-              <div class="stat-box">
-                <div class="stat-title">Attempts</div>
-                <div class="stat-value">${attempts}</div>
-              </div>
+              ${
+                isKitEngine
+                  ? `
+                    <div class="stat-box">
+                      <div class="stat-title">Elapsed</div>
+                      <div class="stat-value">${kitSeconds.toFixed(2)}s</div>
+                    </div>
+                  `
+                  : `
+                    <div class="stat-box">
+                      <div class="stat-title">Attempts</div>
+                      <div class="stat-value">${attempts}</div>
+                    </div>
 
-              <div class="stat-box">
-                <div class="stat-title">Speed</div>
-                <div class="stat-value">${speed}</div>
-              </div>
+                    <div class="stat-box">
+                      <div class="stat-title">Speed</div>
+                      <div class="stat-value">${speed}</div>
+                    </div>
+                  `
+              }
             </div>
 
             <div class="wallet-box">
@@ -664,8 +697,8 @@ startBtn?.addEventListener('click', () => {
             <button id="downloadJsonBtn">Download JSON Keypair</button>
 
             <div class="import-box">
-              <strong>Import into Phantom or Solflare</strong><br><br>
-              1. Open Phantom or Solflare.<br>
+              <strong>Import into a Solana wallet</strong><br><br>
+              1. Open Phantom, Solflare, Backpack or another Solana wallet.<br>
               2. Choose Add / Import Wallet.<br>
               3. Choose Private Key.<br>
               4. Paste the private key.<br>
@@ -711,4 +744,3 @@ startBtn?.addEventListener('click', () => {
 
 renderRecentWallets()
 renderPatternFields()
-testKitGrind()
