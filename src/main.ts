@@ -52,10 +52,11 @@ app.innerHTML = `
       <br>
 
       <label>Match position</label>
-      <select id="position">
-        <option value="prefix">Start of wallet</option>
-        <option value="suffix">End of wallet</option>
-      </select>
+     <select id="position">
+  <option value="prefix">Start of wallet</option>
+  <option value="suffix">End of wallet</option>
+  <option value="both">Start OR end of wallet</option>
+</select>
 
       <br><br>
 

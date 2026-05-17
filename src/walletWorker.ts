@@ -19,11 +19,11 @@ self.onmessage = (event) => {
       ignoreCase ? publicKey.toLowerCase() : publicKey
 
     const matchesPrefix =
-      position === 'prefix' &&
+      (position === 'prefix' || position === 'both') &&
       searchablePublicKey.startsWith(searchPattern)
 
     const matchesSuffix =
-      position === 'suffix' &&
+      (position === 'suffix' || position === 'both') &&
       searchablePublicKey.endsWith(searchPattern)
 
     if (matchesPrefix || matchesSuffix) {
