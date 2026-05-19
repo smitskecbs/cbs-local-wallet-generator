@@ -202,24 +202,64 @@ strong {
 
 @media (max-width: 700px) {
   .container {
-    padding: 24px 14px 60px;
+    padding: 18px 10px 60px;
   }
 
   .hero img {
-    border-radius: 20px;
-    margin-bottom: 18px;
+    border-radius: 18px;
+    margin-bottom: 16px;
   }
 
   .card {
-    padding: 22px;
+    margin: 20px auto;
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .import-box,
+  .status-searching,
+  .status-found,
+  .wallet-box {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  input,
+  select {
+    font-size: 16px;
+    padding: 14px;
+    border-radius: 14px;
   }
 
   button {
     width: 100%;
+    margin: 8px 0;
+    padding: 15px 18px;
+    font-size: 16px;
   }
 
   .stat-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+
+  .wallet-key {
+    font-size: 14px;
+    line-height: 1.7;
+    word-break: break-all;
+  }
+
+  .checkbox-row {
+    align-items: flex-start;
+  }
+
+  .footer {
+    font-size: 14px;
+    padding: 0 10px;
   }
 }
 .checkbox-row {
@@ -257,4 +297,15 @@ strong {
 
 .footer a:hover {
   text-decoration: underline;
+}
+.hidden {
+  display: none;
+}
+.intro-box {
+  padding: 24px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #fff8ef, #fff0d6);
+  border: 1px solid rgba(218, 113, 0, 0.28);
+  margin-bottom: 18px;
+  line-height: 1.7;
 }

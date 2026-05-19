@@ -33,17 +33,23 @@ app.innerHTML = `
       <img src="${banner}" alt="CBS Wallet Generator Banner" />
     </div>
 
-    <div class="card">
-      <div class="import-box">
-        <strong>Safety notice</strong><br><br>
-        This tool generates Solana wallets locally in your browser.<br>
-        No backend. No cloud key storage. Private keys stay on your device.<br><br>
-        Always back up your private key offline. Never share your private key.
-      </div>
+   <div class="intro-box">
+  <strong>Create a custom Solana wallet address</strong><br><br>
+  1. Enter a short word like CBS or BONK.<br>
+  2. Click Start Search.<br>
+  3. When a match is found, save your wallet backup safely.<br><br>
+  Everything runs locally on your device.
+</div>
+
+<div class="import-box">
+  <strong>Safety notice</strong><br><br>
+  Never share your private key.<br>
+  Anyone with your private key can access your wallet.
+</div>
 
       <br>
 
-      <label>Match position</label>
+      <label>Where should the word appear?</label>
       <select id="position">
         <option value="prefix">Start of wallet</option>
         <option value="suffix">End of wallet</option>
@@ -55,7 +61,7 @@ app.innerHTML = `
 
       <div class="checkbox-row">
         <input id="ignoreCase" type="checkbox" />
-        <label for="ignoreCase">Ignore letter casing</label>
+        <label for="ignoreCase">Match uppercase and lowercase</label>
       </div>
 
       <p>Invalid characters: 0 O I l</p>
@@ -70,7 +76,11 @@ app.innerHTML = `
       </div>
 
       <br>
+<button id="toggleAdvancedBtn" type="button">
+  Show Advanced Settings
+</button>
 
+<div id="advancedOptions" class="hidden">
       <label>Engine</label>
       <select id="engine">
         <option value="kit" selected>Solana Kit</option>
@@ -94,11 +104,11 @@ app.innerHTML = `
         <option value="8">8 Workers</option>
         <option value="max">Max Device Threads</option>
       </select>
-
+      </div>
       <br><br>
 
-      <button id="startBtn">Start Search</button>
-      <button id="stopBtn">Stop Search</button>
+     <button id="startBtn">Generate Wallet</button>
+      <button id="stopBtn">Stop</button>
     </div>
 
     <div class="card">
@@ -134,7 +144,21 @@ const recentWallets = document.getElementById('recentWallets')
 const clearRecentBtn = document.getElementById('clearRecentBtn')
 const estimateBox = document.getElementById('estimateBox')
 const advancedWarning = document.getElementById('advancedWarning')
+const toggleAdvancedBtn =
+  document.getElementById('toggleAdvancedBtn')
 
+const advancedOptions =
+  document.getElementById('advancedOptions')
+  toggleAdvancedBtn?.addEventListener('click', () => {
+  advancedOptions?.classList.toggle('hidden')
+
+  const isHidden =
+    advancedOptions?.classList.contains('hidden')
+
+  toggleAdvancedBtn.textContent = isHidden
+    ? 'Show Advanced Options'
+    : 'Hide Advanced Options'
+})
 function isKitEngineValue(engine?: string) {
   const value = (engine || '').toLowerCase()
 
