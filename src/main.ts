@@ -33,17 +33,23 @@ app.innerHTML = `
       <img src="${banner}" alt="CBS Wallet Generator Banner" />
     </div>
 
-    <div class="card">
-      <div class="import-box">
-        <strong>Safety notice</strong><br><br>
-        This tool generates Solana wallets locally in your browser.<br>
-        No backend. No cloud key storage. Private keys stay on your device.<br><br>
-        Always back up your private key offline. Never share your private key.
-      </div>
+   <div class="intro-box reveal">
+  <strong>Create a custom Solana wallet address</strong><br><br>
+  1. Enter a short word like CBS or BONK.<br>
+  2. Click Start Search.<br>
+  3. When a match is found, save your wallet backup safely.<br><br>
+  Everything runs locally on your device.
+</div>
+
+<div class="import-box reveal">
+  <strong>Safety notice</strong><br><br>
+  Never share your private key.<br>
+  Anyone with your private key can access your wallet.
+</div>
 
       <br>
 
-      <label>Match position</label>
+      <label>Where should the word appear?</label>
       <select id="position">
         <option value="prefix">Start of wallet</option>
         <option value="suffix">End of wallet</option>
@@ -55,12 +61,12 @@ app.innerHTML = `
 
       <div class="checkbox-row">
         <input id="ignoreCase" type="checkbox" />
-        <label for="ignoreCase">Ignore letter casing</label>
+        <label for="ignoreCase">Match uppercase and lowercase</label>
       </div>
 
       <p>Invalid characters: 0 O I l</p>
 
-      <div id="estimateBox" class="import-box">
+      <div id="estimateBox" class="import-box reveal">
         Enter a pattern to see estimated difficulty.
       </div>
 
@@ -71,6 +77,7 @@ app.innerHTML = `
 
       <br>
 
+<div id="advancedOptions" class="collapsed">
       <label>Engine</label>
       <select id="engine">
         <option value="kit" selected>Solana Kit</option>
@@ -94,19 +101,40 @@ app.innerHTML = `
         <option value="8">8 Workers</option>
         <option value="max">Max Device Threads</option>
       </select>
-
+      </div>
       <br><br>
 
-      <button id="startBtn">Start Search</button>
-      <button id="stopBtn">Stop Search</button>
+     <button id="startBtn">Generate Wallet</button>
+      <button id="stopBtn">Stop</button>
+      <button id="toggleAdvancedBtn" type="button">
+        Show Advanced
+      </button>
     </div>
 
-    <div class="card">
+    <div class="card reveal">
       <h2>Status</h2>
       <div id="status">Waiting...</div>
     </div>
 
-    <div class="card">
+    <div id="statusModal" class="modal-overlay hidden">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <div>
+            <h2>Generation Status</h2>
+            <p class="modal-subtitle">Live search progress</p>
+          </div>
+          <button id="closeModalBtn" class="modal-close" type="button">×</button>
+        </div>
+        <div id="modalStatus" class="modal-status">
+          Waiting...
+        </div>
+        <div class="modal-actions">
+          <button id="modalStopBtn" type="button">Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card reveal">
       <h2>Recent Found Wallets</h2>
       <div id="recentWallets">No recent wallets yet.</div>
       <button id="clearRecentBtn">Clear Recent Wallets</button>
@@ -125,6 +153,10 @@ app.innerHTML = `
 const startBtn = document.getElementById('startBtn')
 const stopBtn = document.getElementById('stopBtn')
 const status = document.getElementById('status')
+const statusModal = document.getElementById('statusModal')
+const modalStatus = document.getElementById('modalStatus')
+const modalStopBtn = document.getElementById('modalStopBtn')
+const closeModalBtn = document.getElementById('closeModalBtn')
 const positionSelect = document.getElementById('position') as HTMLSelectElement
 const workerCountSelect = document.getElementById('workerCount') as HTMLSelectElement
 const engineSelect = document.getElementById('engine') as HTMLSelectElement
@@ -134,6 +166,91 @@ const recentWallets = document.getElementById('recentWallets')
 const clearRecentBtn = document.getElementById('clearRecentBtn')
 const estimateBox = document.getElementById('estimateBox')
 const advancedWarning = document.getElementById('advancedWarning')
+const toggleAdvancedBtn =
+  document.getElementById('toggleAdvancedBtn')
+
+const advancedOptions =
+  document.getElementById('advancedOptions')
+
+toggleAdvancedBtn?.addEventListener('click', () => {
+  advancedOptions?.classList.toggle('collapsed')
+
+  const isHidden =
+    advancedOptions?.classList.contains('collapsed')
+
+  toggleAdvancedBtn.textContent = isHidden
+    ? 'Show Advanced'
+    : 'Hide Advanced'
+})
+
+function setStatusHtml(html: string) {
+  if (status) status.innerHTML = html
+  if (modalStatus) modalStatus.innerHTML = html
+}
+
+function bindWalletActionButtons(
+  container: ParentNode | null,
+  publicKey: string,
+  privateKey: string,
+  secretKey: Uint8Array
+) {
+  if (!container) return
+
+  container.querySelector<HTMLButtonElement>('#copyPublicBtn')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(publicKey)
+    alert('Public key copied!')
+  })
+
+  container.querySelector<HTMLButtonElement>('#copyPrivateBtn')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(privateKey)
+    alert('Private key copied!')
+  })
+
+  container.querySelector<HTMLButtonElement>('#downloadBtn')?.addEventListener('click', () => {
+    downloadWalletBackup(publicKey, privateKey)
+  })
+
+  container.querySelector<HTMLButtonElement>('#downloadJsonBtn')?.addEventListener('click', () => {
+    downloadJsonKeypair(secretKey, publicKey)
+  })
+}
+
+function attachWalletActionHandlers(
+  publicKey: string,
+  privateKey: string,
+  secretKey: Uint8Array
+) {
+  bindWalletActionButtons(status, publicKey, privateKey, secretKey)
+  bindWalletActionButtons(modalStatus, publicKey, privateKey, secretKey)
+}
+
+function openStatusModal() {
+  if (!statusModal) return
+  statusModal.classList.remove('hidden')
+  setTimeout(() => {
+    statusModal.classList.add('open')
+  }, 20)
+}
+
+function closeStatusModal() {
+  if (!statusModal) return
+  statusModal.classList.remove('open')
+  statusModal.addEventListener(
+    'transitionend',
+    () => {
+      statusModal.classList.add('hidden')
+    },
+    { once: true }
+  )
+}
+
+modalStopBtn?.addEventListener('click', () => {
+  stopBtn?.click()
+})
+
+closeModalBtn?.addEventListener('click', () => {
+  closeStatusModal()
+})
 
 function isKitEngineValue(engine?: string) {
   const value = (engine || '').toLowerCase()
@@ -444,7 +561,7 @@ function updateStatus(workerCount: number) {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
   const isKit = engineSelect.value === 'kit'
 
-  status!.innerHTML = `
+  setStatusHtml(`
     <div class="status-searching">
       <strong>Searching...</strong>
 
@@ -489,7 +606,7 @@ function updateStatus(workerCount: number) {
           : 'wallets/sec'
       }
     </div>
-  `
+  `)
 
   updateEstimate()
 }
@@ -576,11 +693,11 @@ clearRecentBtn?.addEventListener('click', () => {
 stopBtn?.addEventListener('click', () => {
   stopWorkers()
 
-  status!.innerHTML = `
+  setStatusHtml(`
     <div class="status-searching">
       Search stopped.
     </div>
-  `
+  `)
 })
 
 startBtn?.addEventListener('click', () => {
@@ -591,20 +708,20 @@ startBtn?.addEventListener('click', () => {
   const ignoreCase = ignoreCaseInput.checked
 
   if (!pattern) {
-    status!.innerHTML = `
+    setStatusHtml(`
       <div class="status-searching">
         Please enter a pattern.
       </div>
-    `
+    `)
     return
   }
 
   if (position === 'bothEnds' && !endPattern) {
-    status!.innerHTML = `
+    setStatusHtml(`
       <div class="status-searching">
         Please enter an end pattern for Start AND end mode.
       </div>
-    `
+    `)
     return
   }
 
@@ -614,14 +731,14 @@ startBtn?.addEventListener('click', () => {
       ...getBlockedCharacters(endPattern),
     ].join(', ')
 
-    status!.innerHTML = `
+    setStatusHtml(`
       <div class="status-searching">
         <strong>Invalid pattern</strong><br><br>
         These characters are not allowed in Solana Base58 addresses:<br><br>
         <strong>${invalidCharacters}</strong><br><br>
         Please remove them and try again.
       </div>
-    `
+    `)
     return
   }
 
@@ -630,6 +747,7 @@ startBtn?.addEventListener('click', () => {
   isSearching = true
   attempts = 0
   startTime = Date.now()
+  openStatusModal()
 
   if (engineSelect.value === 'kit') {
     const interval = setInterval(() => {
@@ -703,7 +821,7 @@ startBtn?.addEventListener('click', () => {
           createdAt: new Date().toLocaleString(),
         })
 
-        status!.innerHTML = `
+        setStatusHtml(`
           <div class="status-found">
             <strong>MATCH FOUND</strong>
 
@@ -770,25 +888,9 @@ startBtn?.addEventListener('click', () => {
               Keep this file offline. Never share your private key.
             </p>
           </div>
-        `
+        `)
 
-        document.getElementById('copyPublicBtn')?.addEventListener('click', () => {
-          navigator.clipboard.writeText(publicKey)
-          alert('Public key copied!')
-        })
-
-        document.getElementById('copyPrivateBtn')?.addEventListener('click', () => {
-          navigator.clipboard.writeText(privateKey)
-          alert('Private key copied!')
-        })
-
-        document.getElementById('downloadBtn')?.addEventListener('click', () => {
-          downloadWalletBackup(publicKey, privateKey)
-        })
-
-        document.getElementById('downloadJsonBtn')?.addEventListener('click', () => {
-          downloadJsonKeypair(secretKey, publicKey)
-        })
+        attachWalletActionHandlers(publicKey, privateKey, secretKey)
       }
     }
 
@@ -805,3 +907,28 @@ startBtn?.addEventListener('click', () => {
 
 renderRecentWallets()
 renderPatternFields()
+setupScrollReveal()
+
+function setupScrollReveal() {
+  const revealElements = document.querySelectorAll<HTMLElement>('.reveal')
+
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible')
+            observer.unobserve(entry.target)
+          }
+        }
+      },
+      {
+        threshold: 0.15,
+      }
+    )
+
+    revealElements.forEach((element) => observer.observe(element))
+  } else {
+    revealElements.forEach((element) => element.classList.add('visible'))
+  }
+}

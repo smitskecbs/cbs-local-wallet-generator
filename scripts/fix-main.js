@@ -1,0 +1,10 @@
+const fs = require('fs');
+const path = require('path');
+const file = path.join(__dirname, '..', 'src', 'main.ts');
+const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+lines[856] = "        document.getElementById('copyPublicBtn')?.addEventListener('click', () => {";
+lines[861] = "        document.getElementById('copyPrivateBtn')?.addEventListener('click', () => {";
+lines[866] = "        document.getElementById('downloadBtn')?.addEventListener('click', () => {";
+lines[870] = "        document.getElementById('downloadJsonBtn')?.addEventListener('click', () => {";
+fs.writeFileSync(file, lines.join('\n'), 'utf8');
+console.log('Patched main.ts event listener lines');
