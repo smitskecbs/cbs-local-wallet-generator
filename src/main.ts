@@ -33,7 +33,7 @@ app.innerHTML = `
       <img src="${banner}" alt="CBS Wallet Generator Banner" />
     </div>
 
-   <div class="intro-box">
+   <div class="intro-box reveal">
   <strong>Create a custom Solana wallet address</strong><br><br>
   1. Enter a short word like CBS or BONK.<br>
   2. Click Start Search.<br>
@@ -41,7 +41,7 @@ app.innerHTML = `
   Everything runs locally on your device.
 </div>
 
-<div class="import-box">
+<div class="import-box reveal">
   <strong>Safety notice</strong><br><br>
   Never share your private key.<br>
   Anyone with your private key can access your wallet.
@@ -66,7 +66,7 @@ app.innerHTML = `
 
       <p>Invalid characters: 0 O I l</p>
 
-      <div id="estimateBox" class="import-box">
+      <div id="estimateBox" class="import-box reveal">
         Enter a pattern to see estimated difficulty.
       </div>
 
@@ -77,10 +77,10 @@ app.innerHTML = `
 
       <br>
 <button id="toggleAdvancedBtn" type="button">
-  Show Advanced Settings
+  Show Advanced
 </button>
 
-<div id="advancedOptions" class="hidden">
+<div id="advancedOptions" class="collapsed">
       <label>Engine</label>
       <select id="engine">
         <option value="kit" selected>Solana Kit</option>
@@ -111,12 +111,12 @@ app.innerHTML = `
       <button id="stopBtn">Stop</button>
     </div>
 
-    <div class="card">
+    <div class="card reveal">
       <h2>Status</h2>
       <div id="status">Waiting...</div>
     </div>
 
-    <div class="card">
+    <div class="card reveal">
       <h2>Recent Found Wallets</h2>
       <div id="recentWallets">No recent wallets yet.</div>
       <button id="clearRecentBtn">Clear Recent Wallets</button>
@@ -150,14 +150,14 @@ const toggleAdvancedBtn =
 const advancedOptions =
   document.getElementById('advancedOptions')
   toggleAdvancedBtn?.addEventListener('click', () => {
-  advancedOptions?.classList.toggle('hidden')
+  advancedOptions?.classList.toggle('collapsed')
 
   const isHidden =
-    advancedOptions?.classList.contains('hidden')
+    advancedOptions?.classList.contains('collapsed')
 
   toggleAdvancedBtn.textContent = isHidden
-    ? 'Show Advanced Options'
-    : 'Hide Advanced Options'
+    ? 'Show Advanced'
+    : 'Hide Advanced'
 })
 function isKitEngineValue(engine?: string) {
   const value = (engine || '').toLowerCase()
@@ -829,3 +829,28 @@ startBtn?.addEventListener('click', () => {
 
 renderRecentWallets()
 renderPatternFields()
+setupScrollReveal()
+
+function setupScrollReveal() {
+  const revealElements = document.querySelectorAll<HTMLElement>('.reveal')
+
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible')
+            observer.unobserve(entry.target)
+          }
+        }
+      },
+      {
+        threshold: 0.15,
+      }
+    )
+
+    revealElements.forEach((element) => observer.observe(element))
+  } else {
+    revealElements.forEach((element) => element.classList.add('visible'))
+  }
+}
