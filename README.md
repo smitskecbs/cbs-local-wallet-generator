@@ -1,128 +1,78 @@
-\# CBS Local Wallet Generator
+# CBS Local Wallet Generator
 
+A premium local multi-core Solana vanity wallet generator built with TypeScript and Web Workers.
 
+Generate custom Solana wallet addresses directly in your browser with no backend, no cloud key storage and full local-only generation.
 
-A local browser-based Solana vanity wallet generator.
+---
 
+## Features
 
+- Solana Kit support
+- web3.js legacy fallback
+- Multi-core worker support
+- Mobile-friendly crypto UI
+- Local-only wallet generation
+- No backend required
+- Wallet backup export
+- JSON keypair export
+- Recent wallet history
+- Beginner-friendly mode
+- Advanced settings mode
 
-Live app: https://wallet.cbs-coin.com
+---
 
+## Security
 
+All wallet generation happens locally inside your browser.
 
-\## What it does
+Private keys never leave your device.
 
-
-
-CBS Local Wallet Generator lets users generate custom Solana wallet addresses with a chosen pattern.
-
-
-
-Examples:
-
-
-
-\- `CBS...`
-
-\- `BONK...`
-
-\- `...smits`
-
-\- start or end matching
-
-
-
-Everything runs locally in the browser.
-
-
-
-\## Features
-
-
-
-\- Local Solana wallet generation
-
-\- Multi-core Web Worker support
-
-\- Prefix matching
-
-\- Suffix matching
-
-\- Start OR end matching
-
-\- Case-sensitive or ignore-case search
-
-\- Base58 validation
-
-\- Live speed and attempt counter
-
-\- Estimated difficulty
-
-\- Recent public-key history
-
-\- TXT wallet backup export
-
-\- JSON keypair export
-
-\- Phantom/Solflare compatible
-
-\- PWA install support
-
-
-
-\## Safety warning
-
-
-
-Private keys are generated locally in your browser.
-
-
-
-There is no backend and no cloud key storage.
-
-
-
-Always back up your private key offline.
-
-
+Always store your private key safely and offline.
 
 Never share your private key with anyone.
 
+---
 
+## Live Demo
 
-Use this tool at your own risk.
+https://wallet.cbs-coin.com
 
+---
 
+## Run Locally
 
-\## How to use
+```bash
+npm install
+npm run dev
+```
 
+---
 
+## Build
 
-1\. Enter a wallet pattern.
+```bash
+npm run build
+```
 
-2\. Choose start, end, or start OR end matching.
+---
 
-3\. Choose worker count.
+## Tech Stack
 
-4\. Start the search.
+- TypeScript
+- Vite
+- Solana Kit
+- web3.js
+- Web Workers
 
-5\. When a match is found, download your backup.
+---
 
-6\. Import the private key into Phantom or Solflare.
+## Philosophy
 
+The goal of this project is to provide a fast, transparent and beginner-friendly way to generate custom Solana wallet addresses locally without relying on centralized services.
 
+---
 
-\## Built with
+## License
 
-
-
-\- TypeScript
-
-\- Vite
-
-\- Solana Web3.js
-
-\- Web Workers
-
-\- GitHub Pages
-
+MIT
