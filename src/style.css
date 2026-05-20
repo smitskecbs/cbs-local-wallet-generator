@@ -387,6 +387,95 @@ strong {
 .footer a:hover {
   text-decoration: underline;
 }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 28, 48, 0.45);
+  backdrop-filter: blur(12px);
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.98);
+  transition: opacity 260ms ease, transform 260ms ease;
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.modal-panel {
+  width: min(760px, 100%);
+  max-height: min(85vh, 760px);
+  overflow: auto;
+  background: rgba(255,255,255,0.96);
+  border-radius: 24px;
+  border: 1px solid rgba(223, 134, 28, 0.22);
+  box-shadow: 0 40px 120px rgba(12, 20, 40, 0.18);
+  padding: 28px;
+  position: relative;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #1f2937;
+}
+
+.modal-subtitle {
+  margin: 6px 0 0;
+  color: #556174;
+  font-size: 14px;
+}
+
+.modal-close {
+  border: none;
+  background: rgba(37, 59, 86, 0.08);
+  color: #1f2937;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  transition: background 200ms ease, transform 200ms ease;
+}
+
+.modal-close:hover {
+  background: rgba(223, 134, 28, 0.16);
+  transform: scale(1.04);
+}
+
+.modal-status {
+  min-height: 180px;
+}
+
+.modal-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-actions button {
+  width: auto;
+}
+
 .hidden {
   display: none;
 }
