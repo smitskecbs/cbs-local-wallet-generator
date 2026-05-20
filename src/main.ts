@@ -188,6 +188,42 @@ function setStatusHtml(html: string) {
   if (modalStatus) modalStatus.innerHTML = html
 }
 
+function bindWalletActionButtons(
+  container: ParentNode | null,
+  publicKey: string,
+  privateKey: string,
+  secretKey: Uint8Array
+) {
+  if (!container) return
+
+  container.querySelector<HTMLButtonElement>('#copyPublicBtn')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(publicKey)
+    alert('Public key copied!')
+  })
+
+  container.querySelector<HTMLButtonElement>('#copyPrivateBtn')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(privateKey)
+    alert('Private key copied!')
+  })
+
+  container.querySelector<HTMLButtonElement>('#downloadBtn')?.addEventListener('click', () => {
+    downloadWalletBackup(publicKey, privateKey)
+  })
+
+  container.querySelector<HTMLButtonElement>('#downloadJsonBtn')?.addEventListener('click', () => {
+    downloadJsonKeypair(secretKey, publicKey)
+  })
+}
+
+function attachWalletActionHandlers(
+  publicKey: string,
+  privateKey: string,
+  secretKey: Uint8Array
+) {
+  bindWalletActionButtons(status, publicKey, privateKey, secretKey)
+  bindWalletActionButtons(modalStatus, publicKey, privateKey, secretKey)
+}
+
 function openStatusModal() {
   if (!statusModal) return
   statusModal.classList.remove('hidden')
@@ -854,23 +890,7 @@ startBtn?.addEventListener('click', () => {
           </div>
         `)
 
-        document.getElementById('copyPublicBtn')?.addEventListener('click', () => {
-          navigator.clipboard.writeText(publicKey)
-          alert('Public key copied!')
-        })
-
-        document.getElementById('copyPrivateBtn')?.addEventListener('click', () => {
-          navigator.clipboard.writeText(privateKey)
-          alert('Private key copied!')
-        })
-
-        document.getElementById('downloadBtn')?.addEventListener('click', () => {
-          downloadWalletBackup(publicKey, privateKey)
-        })
-
-        document.getElementById('downloadJsonBtn')?.addEventListener('click', () => {
-          downloadJsonKeypair(secretKey, publicKey)
-        })
+        attachWalletActionHandlers(publicKey, privateKey, secretKey)
       }
     }
 
