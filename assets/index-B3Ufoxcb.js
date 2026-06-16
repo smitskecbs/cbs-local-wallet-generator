@@ -8,18 +8,15 @@
         alt="CBS Wallet Generator"
       />
       <p class="site-hero-subtitle">
-        Create custom
-        <span class="solana-brand">
-          <img
-            class="solana-logomark"
-            src="./assets/solana-logomark.svg"
-            alt=""
-            width="18"
-            height="14"
-            loading="lazy"
-          />
-          Solana
-        </span>
+        Create custom Solana
+        <img
+          class="solana-logomark"
+          src="./assets/solana-logomark.svg"
+          alt=""
+          width="16"
+          height="12"
+          loading="lazy"
+        />
         wallet addresses locally in your browser.
       </p>
 
@@ -40,7 +37,7 @@
               <strong class="community-message-emphasis">completely free to use</strong>.
             </p>
             <p class="community-message-note">
-              You only pay Solana network fees if you later use the wallet on-chain.
+              No wallet connection. No transaction. No platform fees.
             </p>
             <p class="community-message-note">
               Keys are generated locally in your browser and never leave your device.
