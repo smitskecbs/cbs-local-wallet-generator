@@ -35,7 +35,11 @@ self.onmessage = (event) => {
       searchablePublicKey.startsWith(searchPattern) &&
       searchablePublicKey.endsWith(searchEndPattern)
 
-    if (matchesPrefix || matchesSuffix || matchesBothEnds) {
+    const matchesAnywhere =
+      position === 'anywhere' &&
+      searchablePublicKey.includes(searchPattern)
+
+    if (matchesPrefix || matchesSuffix || matchesBothEnds || matchesAnywhere) {
       self.postMessage({
         type: 'found',
         publicKey,

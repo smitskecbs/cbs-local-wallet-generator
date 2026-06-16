@@ -15,6 +15,7 @@ let lastMeasuredSpeed = 0
 
 const blockedCharacters = ['0', 'O', 'I', 'l']
 const recentWalletsKey = 'cbs-recent-wallets'
+const averageSolanaAddressLength = 44
 
 type RecentWallet = {
   publicKey: string
@@ -27,27 +28,46 @@ type RecentWallet = {
   createdAt: string
 }
 
+const donationWallet = 'ManGofryUWC5VWk7t4ATP32qJtGVBBNoVi2AQ9HyR9J'
+
 app.innerHTML = `
-  <div class="container">
-    <div class="hero">
-      <img src="${banner}" alt="CBS Wallet Generator Banner" />
-    </div>
+  <main class="app-shell">
+    <header class="site-hero" aria-labelledby="hero-heading">
+      <img
+        id="hero-heading"
+        class="site-banner"
+        src="${banner}"
+        alt="CBS Wallet Generator"
+      />
+      <p class="site-hero-subtitle">
+        Create custom Solana wallet addresses locally in your browser.
+      </p>
+    </header>
 
-   <div class="intro-box reveal">
-  <strong>Create a custom Solana wallet address</strong><br><br>
-  1. Enter a short word like CBS or BONK.<br>
-  2. Click Start Search.<br>
-  3. When a match is found, save your wallet backup safely.<br><br>
-  Everything runs locally on your device.
-</div>
+    <section class="page-section">
+      <div class="page-overview edu-block reveal">
+        <p class="edu-block-title">Page overview</p>
+        <h1 class="edu-block-heading">CBS Wallet Generator</h1>
+        <p class="edu-block-text">
+          Search for a Solana wallet address that contains your chosen word at the start,
+          end, or both. Keys are generated on your device and never sent to a server.
+        </p>
+        <ol class="edu-block-list">
+          <li>Enter a short word like CBS or BONK.</li>
+          <li>Click Generate Wallet.</li>
+          <li>When a match is found, save your wallet backup safely.</li>
+        </ol>
+      </div>
+    </section>
 
-<div class="import-box reveal">
-  <strong>Safety notice</strong><br><br>
-  Never share your private key.<br>
-  Anyone with your private key can access your wallet.
-</div>
+    <section class="page-section card reveal">
+      <h2>Generate Wallet</h2>
 
-      <br>
+      <div class="import-box reveal">
+        <strong>Safety notice</strong><br><br>
+        Never share your private key.<br>
+        Anyone with your private key can access your wallet.
+      </div>
 
       <label>Where should the word appear?</label>
       <select id="position">
@@ -55,6 +75,7 @@ app.innerHTML = `
         <option value="suffix">End of wallet</option>
         <option value="both">Start OR end of wallet</option>
         <option value="bothEnds">Start AND end of wallet</option>
+        <option value="anywhere">Anywhere in wallet</option>
       </select>
 
       <div id="patternFields"></div>
@@ -75,46 +96,43 @@ app.innerHTML = `
         Use short patterns first.
       </div>
 
-      <br>
+      <div id="advancedOptions" class="collapsed">
+        <label>Engine</label>
+        <select id="engine">
+          <option value="kit" selected>Solana Kit</option>
+          <option value="web3">web3.js (Legacy)</option>
+        </select>
 
-<div id="advancedOptions" class="collapsed">
-      <label>Engine</label>
-      <select id="engine">
-        <option value="kit" selected>Solana Kit</option>
-        <option value="web3">web3.js (Legacy)</option>
-      </select>
+        <div class="engine-info">
+          <strong>Engine info</strong><br>
+          Solana Kit is the modern default engine.<br>
+          web3.js is kept as legacy fallback mode.
+        </div>
 
-      <div class="engine-info">
-        <strong>Engine info</strong><br>
-        Solana Kit is the modern default engine.<br>
-        web3.js is kept as legacy fallback mode.
+        <label>Workers</label>
+        <select id="workerCount">
+          <option value="auto" selected>Auto Recommended</option>
+          <option value="1">1 Worker</option>
+          <option value="2">2 Workers</option>
+          <option value="4">4 Workers</option>
+          <option value="8">8 Workers</option>
+          <option value="max">Max Device Threads</option>
+        </select>
       </div>
 
-      <br><br>
-
-      <label>Workers</label>
-      <select id="workerCount">
-        <option value="auto" selected>Auto Recommended</option>
-        <option value="1">1 Worker</option>
-        <option value="2">2 Workers</option>
-        <option value="4">4 Workers</option>
-        <option value="8">8 Workers</option>
-        <option value="max">Max Device Threads</option>
-      </select>
+      <div class="button-row">
+        <button id="startBtn" type="button">Generate Wallet</button>
+        <button id="stopBtn" class="secondary-btn" type="button">Stop</button>
+        <button id="toggleAdvancedBtn" class="secondary-btn" type="button">
+          Show Advanced
+        </button>
       </div>
-      <br><br>
+    </section>
 
-     <button id="startBtn">Generate Wallet</button>
-      <button id="stopBtn">Stop</button>
-      <button id="toggleAdvancedBtn" type="button">
-        Show Advanced
-      </button>
-    </div>
-
-    <div class="card reveal">
+    <section class="page-section card reveal">
       <h2>Status</h2>
       <div id="status">Waiting...</div>
-    </div>
+    </section>
 
     <div id="statusModal" class="modal-overlay hidden">
       <div class="modal-panel">
@@ -123,31 +141,81 @@ app.innerHTML = `
             <h2>Generation Status</h2>
             <p class="modal-subtitle">Live search progress</p>
           </div>
-          <button id="closeModalBtn" class="modal-close" type="button">×</button>
+          <button id="closeModalBtn" class="modal-close secondary-btn" type="button">×</button>
         </div>
         <div id="modalStatus" class="modal-status">
           Waiting...
         </div>
         <div class="modal-actions">
-          <button id="modalStopBtn" type="button">Stop</button>
+          <button id="modalStopBtn" class="secondary-btn" type="button">Stop</button>
         </div>
       </div>
     </div>
 
-    <div class="card reveal">
+    <section class="page-section card reveal">
       <h2>Recent Found Wallets</h2>
       <div id="recentWallets">No recent wallets yet.</div>
-      <button id="clearRecentBtn">Clear Recent Wallets</button>
-    </div>
+      <button id="clearRecentBtn" class="secondary-btn" type="button">Clear Recent Wallets</button>
+    </section>
 
-    <footer class="footer">
-      Built locally in your browser • No backend • No cloud key storage<br>
-      Open source on
-      <a href="https://github.com/smitskecbs/cbs-local-wallet-generator" target="_blank">
-        GitHub
-      </a>
+    <section class="support-section" aria-labelledby="support-title">
+      <div class="support-card">
+        <p class="support-title" id="support-title">Support CBS Ecosystem</p>
+        <p class="support-text">
+          Optional donations help fund development and infrastructure.
+        </p>
+        <code class="support-wallet" data-donation-wallet>${donationWallet}</code>
+        <button
+          type="button"
+          class="secondary-btn support-copy-btn"
+          id="donationCopyBtn"
+        >
+          Copy address
+        </button>
+        <p
+          class="support-confirm"
+          id="donationConfirm"
+          hidden
+          aria-live="polite"
+        >
+          Address copied.
+        </p>
+      </div>
+    </section>
+
+    <footer class="site-footer reveal">
+      <nav class="footer-links" aria-label="CBS ecosystem">
+        <a href="https://tools.cbs-coin.com" target="_blank" rel="noopener noreferrer">CBS Tools</a>
+        <a href="https://cbs-coin.com" target="_blank" rel="noopener noreferrer">CBS Coin</a>
+      </nav>
+      <section class="footer-open-source" aria-labelledby="footer-open-title">
+        <h2 class="footer-open-title" id="footer-open-title">Built in the Open</h2>
+        <p class="footer-open-text">
+          CBS Tools is developed publicly and transparently.
+          Source code, improvements and community contributions can be followed on GitHub.
+        </p>
+        <a
+          class="footer-github-link"
+          href="https://github.com/smitskecbs"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Visit CBS on GitHub"
+        >
+          <svg class="footer-github-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <path
+              d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"
+              fill="currentColor"
+            />
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <p class="footer-badge-row">
+          Open Source • Community Driven • Built on Solana
+        </p>
+      </section>
+      <p class="site-footer-copy">Community-built tools for Solana builders.</p>
     </footer>
-  </div>
+  </main>
 `
 
 const startBtn = document.getElementById('startBtn')
@@ -297,6 +365,14 @@ function renderPatternFields() {
 
       <label>End pattern</label>
       <input id="endPattern" maxlength="5" placeholder="Example: SOL" />
+    `
+  }
+
+  if (position === 'anywhere') {
+    patternFields!.innerHTML = `
+      <label>Pattern</label>
+      <input id="pattern" maxlength="5" placeholder="Example: CBS" />
+      <p>Anywhere in wallet: xxxCBSxxx</p>
     `
   }
 
@@ -529,6 +605,13 @@ function updateEstimate() {
 
   if (position === 'both') {
     matchMultiplier = 2
+  }
+
+  if (position === 'anywhere') {
+    matchMultiplier = Math.max(
+      1,
+      averageSolanaAddressLength - pattern.length + 1
+    )
   }
 
   if (position === 'bothEnds') {
@@ -908,6 +991,36 @@ startBtn?.addEventListener('click', () => {
 renderRecentWallets()
 renderPatternFields()
 setupScrollReveal()
+setupDonationCopy()
+
+function setupDonationCopy() {
+  const copyBtn = document.getElementById('donationCopyBtn')
+  const confirm = document.getElementById('donationConfirm')
+  if (!copyBtn || !confirm) return
+
+  let confirmTimeout: number | undefined
+
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(donationWallet)
+      confirm.hidden = false
+      confirm.textContent = 'Address copied.'
+    } catch {
+      confirm.hidden = false
+      confirm.textContent =
+        'Copy failed. Select the wallet address above and copy manually.'
+    }
+
+    if (confirmTimeout !== undefined) {
+      window.clearTimeout(confirmTimeout)
+    }
+
+    confirmTimeout = window.setTimeout(() => {
+      confirm.hidden = true
+      confirm.textContent = 'Address copied.'
+    }, 2400)
+  })
+}
 
 function setupScrollReveal() {
   const revealElements = document.querySelectorAll<HTMLElement>('.reveal')

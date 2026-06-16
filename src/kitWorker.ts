@@ -32,6 +32,10 @@ function createMatchRegex(
     return new RegExp('^' + start + '.*' + end + '$', flags)
   }
 
+  if (position === 'anywhere') {
+    return new RegExp(start, flags)
+  }
+
   return new RegExp('^' + start, flags)
 }
 
