@@ -1,4 +1,44 @@
-(function(){let e=document.createElement(`link`).relList;if(e&&e.supports&&e.supports(`modulepreload`))return;for(let e of document.querySelectorAll(`link[rel="modulepreload"]`))n(e);new MutationObserver(e=>{for(let t of e)if(t.type===`childList`)for(let e of t.addedNodes)e.tagName===`LINK`&&e.rel===`modulepreload`&&n(e)}).observe(document,{childList:!0,subtree:!0});function t(e){let t={};return e.integrity&&(t.integrity=e.integrity),e.referrerPolicy&&(t.referrerPolicy=e.referrerPolicy),e.crossOrigin===`use-credentials`?t.credentials=`include`:e.crossOrigin===`anonymous`?t.credentials=`omit`:t.credentials=`same-origin`,t}function n(e){if(e.ep)return;e.ep=!0;let n=t(e);fetch(e.href,n)}})();var e=``+new URL(`banner-DxL4ycpa.png`,import.meta.url).href,t=document.querySelector(`#app`);if(!t)throw Error(`App element not found`);var n=!1,r=0,i=[],a=0,o=0,s=[`0`,`O`,`I`,`l`],c=`cbs-recent-wallets`,l=44,u=`ManGofryUWC5VWk7t4ATP32qJtGVBBNoVi2AQ9HyR9J`;t.innerHTML=`
+(function(){let e=document.createElement(`link`).relList;if(e&&e.supports&&e.supports(`modulepreload`))return;for(let e of document.querySelectorAll(`link[rel="modulepreload"]`))n(e);new MutationObserver(e=>{for(let t of e)if(t.type===`childList`)for(let e of t.addedNodes)e.tagName===`LINK`&&e.rel===`modulepreload`&&n(e)}).observe(document,{childList:!0,subtree:!0});function t(e){let t={};return e.integrity&&(t.integrity=e.integrity),e.referrerPolicy&&(t.referrerPolicy=e.referrerPolicy),e.crossOrigin===`use-credentials`?t.credentials=`include`:e.crossOrigin===`anonymous`?t.credentials=`omit`:t.credentials=`same-origin`,t}function n(e){if(e.ep)return;e.ep=!0;let n=t(e);fetch(e.href,n)}})();var e=``+new URL(`banner-DxL4ycpa.png`,import.meta.url).href,t=document.querySelector(`#app`);if(!t)throw Error(`App element not found`);var n=!1,r=0,i=[],a=0,o=0,s=[`0`,`O`,`I`,`l`],c=`cbs-recent-wallets`,l=44,u=`ManGofryUWC5VWk7t4ATP32qJtGVBBNoVi2AQ9HyR9J`;function d(e){return`•`.repeat(Math.max(e.length,52))}function ee(){return`
+    <div class="wallet-box wallet-box--private">
+      <div class="wallet-title">Private Key</div>
+      <p class="private-key-warning">
+        Never share your private key. Anyone with this key can control your wallet.
+      </p>
+      <div class="wallet-key-row">
+        <div
+          class="wallet-key wallet-key--private"
+          data-private-key-hidden="true"
+        ></div>
+        <button
+          type="button"
+          class="secondary-btn toggle-private-key-btn"
+          aria-label="Show private key"
+          aria-pressed="false"
+        >
+          <svg class="eye-icon eye-icon--open" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"
+            />
+          </svg>
+          <svg class="eye-icon eye-icon--closed hidden" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15"
+            />
+          </svg>
+        </button>
+      </div>
+      <div class="wallet-key-actions">
+        <button id="copyPrivateBtn" class="secondary-btn" type="button">
+          Copy Private Key
+        </button>
+        <p class="copy-private-feedback" hidden aria-live="polite">
+          Private key copied.
+        </p>
+      </div>
+    </div>
+  `}function f(e,t){let n=e?.querySelector(`.wallet-key--private`);n&&(n.textContent=d(t),n.dataset.privateKeyHidden=`true`)}function p(e,t){let n=e?.querySelector(`.wallet-key--private`),r=e?.querySelector(`.toggle-private-key-btn`),i=r?.querySelector(`.eye-icon--open`),a=r?.querySelector(`.eye-icon--closed`);!n||!r||r.addEventListener(`click`,()=>{if(n.dataset.privateKeyHidden!==`false`){n.textContent=t,n.dataset.privateKeyHidden=`false`,r.setAttribute(`aria-label`,`Hide private key`),r.setAttribute(`aria-pressed`,`true`),i?.classList.add(`hidden`),a?.classList.remove(`hidden`);return}n.textContent=d(t),n.dataset.privateKeyHidden=`true`,r.setAttribute(`aria-label`,`Show private key`),r.setAttribute(`aria-pressed`,`false`),i?.classList.remove(`hidden`),a?.classList.add(`hidden`)})}function m(e,t){let n=e?.querySelector(`.copy-private-feedback`);n&&(n.hidden=!1,n.textContent=t,window.setTimeout(()=>{n.hidden=!0,n.textContent=`Private key copied.`},2400))}t.innerHTML=`
   <main class="app-shell">
     <header class="site-hero" aria-labelledby="hero-heading">
       <img
@@ -220,26 +260,26 @@
       <p class="site-footer-copy">Community-built tools for Solana builders.</p>
     </footer>
   </main>
-`;var d=document.getElementById(`startBtn`),f=document.getElementById(`stopBtn`),p=document.getElementById(`status`),m=document.getElementById(`statusModal`),h=document.getElementById(`modalStatus`),g=document.getElementById(`modalStopBtn`),ee=document.getElementById(`closeModalBtn`),_=document.getElementById(`position`),v=document.getElementById(`workerCount`),y=document.getElementById(`engine`),b=document.getElementById(`ignoreCase`),x=document.getElementById(`patternFields`),S=document.getElementById(`recentWallets`),C=document.getElementById(`clearRecentBtn`),w=document.getElementById(`estimateBox`),T=document.getElementById(`advancedWarning`),E=document.getElementById(`toggleAdvancedBtn`),D=document.getElementById(`advancedOptions`);E?.addEventListener(`click`,()=>{D?.classList.toggle(`collapsed`),E.textContent=D?.classList.contains(`collapsed`)?`Show Advanced`:`Hide Advanced`});function O(e){p&&(p.innerHTML=e),h&&(h.innerHTML=e)}function k(e,t,n,r){e&&(e.querySelector(`#copyPublicBtn`)?.addEventListener(`click`,()=>{navigator.clipboard.writeText(t),alert(`Public key copied!`)}),e.querySelector(`#copyPrivateBtn`)?.addEventListener(`click`,()=>{navigator.clipboard.writeText(n),alert(`Private key copied!`)}),e.querySelector(`#downloadBtn`)?.addEventListener(`click`,()=>{ne(t,n)}),e.querySelector(`#downloadJsonBtn`)?.addEventListener(`click`,()=>{re(r,t)}))}function A(e,t,n){k(p,e,t,n),k(h,e,t,n)}function j(){m&&(m.classList.remove(`hidden`),setTimeout(()=>{m.classList.add(`open`)},20))}function M(){m&&(m.classList.remove(`open`),m.addEventListener(`transitionend`,()=>{m.classList.add(`hidden`)},{once:!0}))}g?.addEventListener(`click`,()=>{f?.click()}),ee?.addEventListener(`click`,()=>{M()});function N(e){let t=(e||``).toLowerCase();return t===`kit`||t===`solana-kit`||t===`solana kit`}function P(e){return N(e)?`Kit`:`web3.js`}function F(){let e=_.value;e===`prefix`&&(x.innerHTML=`
+`;var h=document.getElementById(`startBtn`),g=document.getElementById(`stopBtn`),_=document.getElementById(`status`),v=document.getElementById(`statusModal`),y=document.getElementById(`modalStatus`),b=document.getElementById(`modalStopBtn`),te=document.getElementById(`closeModalBtn`),x=document.getElementById(`position`),S=document.getElementById(`workerCount`),C=document.getElementById(`engine`),w=document.getElementById(`ignoreCase`),T=document.getElementById(`patternFields`),E=document.getElementById(`recentWallets`),ne=document.getElementById(`clearRecentBtn`),D=document.getElementById(`estimateBox`),O=document.getElementById(`advancedWarning`),k=document.getElementById(`toggleAdvancedBtn`),A=document.getElementById(`advancedOptions`);k?.addEventListener(`click`,()=>{A?.classList.toggle(`collapsed`),k.textContent=A?.classList.contains(`collapsed`)?`Show Advanced`:`Hide Advanced`});function j(e){_&&(_.innerHTML=e),y&&(y.innerHTML=e)}function M(e,t,n,r){e&&(e.querySelector(`#copyPublicBtn`)?.addEventListener(`click`,()=>{navigator.clipboard.writeText(t),alert(`Public key copied!`)}),e.querySelector(`#copyPrivateBtn`)?.addEventListener(`click`,async()=>{try{await navigator.clipboard.writeText(n),m(e,`Private key copied.`)}catch{m(e,`Copy failed. Reveal the private key and copy manually.`)}}),f(e,n),p(e,n),e.querySelector(`#downloadBtn`)?.addEventListener(`click`,()=>{se(t,n)}),e.querySelector(`#downloadJsonBtn`)?.addEventListener(`click`,()=>{ce(r,t)}))}function N(e,t,n){M(_,e,t,n),M(y,e,t,n)}function P(){v&&(v.classList.remove(`hidden`),setTimeout(()=>{v.classList.add(`open`)},20))}function F(){v&&(v.classList.remove(`open`),v.addEventListener(`transitionend`,()=>{v.classList.add(`hidden`)},{once:!0}))}b?.addEventListener(`click`,()=>{g?.click()}),te?.addEventListener(`click`,()=>{F()});function I(e){let t=(e||``).toLowerCase();return t===`kit`||t===`solana-kit`||t===`solana kit`}function L(e){return I(e)?`Kit`:`web3.js`}function R(){let e=x.value;e===`prefix`&&(T.innerHTML=`
       <label>Start pattern</label>
       <input id="pattern" maxlength="5" placeholder="Example: CBS" />
-    `),e===`suffix`&&(x.innerHTML=`
+    `),e===`suffix`&&(T.innerHTML=`
       <label>End pattern</label>
       <input id="pattern" maxlength="5" placeholder="Example: BONK" />
-    `),e===`both`&&(x.innerHTML=`
+    `),e===`both`&&(T.innerHTML=`
       <label>Pattern</label>
       <input id="pattern" maxlength="5" placeholder="Example: SOL" />
-    `),e===`bothEnds`&&(x.innerHTML=`
+    `),e===`bothEnds`&&(T.innerHTML=`
       <label>Start pattern</label>
       <input id="pattern" maxlength="5" placeholder="Example: CBS" />
 
       <label>End pattern</label>
       <input id="endPattern" maxlength="5" placeholder="Example: SOL" />
-    `),e===`anywhere`&&(x.innerHTML=`
+    `),e===`anywhere`&&(T.innerHTML=`
       <label>Pattern</label>
       <input id="pattern" maxlength="5" placeholder="Example: CBS" />
       <p>Anywhere in wallet: xxxCBSxxx</p>
-    `),I()?.addEventListener(`input`,Q),L()?.addEventListener(`input`,Q),Q()}function I(){return document.getElementById(`pattern`)}function L(){return document.getElementById(`endPattern`)}function R(){return I()?.value.trim()||``}function z(){return L()?.value.trim()||``}function B(){n=!1,i.forEach(e=>e.terminate()),i=[]}function V(e){return s.some(t=>e.includes(t))}function H(e){return s.filter(t=>e.includes(t))}function U(){let e=(Date.now()-a)/1e3;if(e<=0)return 0;let t=Math.round(r/e);return t>0&&(o=t),t}function W(){let e=localStorage.getItem(c);if(!e)return[];try{return JSON.parse(e)}catch{return[]}}function G(e){let t=W();t.unshift(e),localStorage.setItem(c,JSON.stringify(t.slice(0,10))),K()}function K(){let e=W();if(e.length===0){S.innerHTML=`No recent wallets yet.`;return}S.innerHTML=e.map(e=>{let t=N(e.engine)?`Elapsed: ${(e.elapsed||0).toFixed(2)}s<br>`:`
+    `),z()?.addEventListener(`input`,Q),B()?.addEventListener(`input`,Q),Q()}function z(){return document.getElementById(`pattern`)}function B(){return document.getElementById(`endPattern`)}function V(){return z()?.value.trim()||``}function H(){return B()?.value.trim()||``}function U(){n=!1,i.forEach(e=>e.terminate()),i=[]}function W(e){return s.some(t=>e.includes(t))}function G(e){return s.filter(t=>e.includes(t))}function K(){let e=(Date.now()-a)/1e3;if(e<=0)return 0;let t=Math.round(r/e);return t>0&&(o=t),t}function q(){let e=localStorage.getItem(c);if(!e)return[];try{return JSON.parse(e)}catch{return[]}}function J(e){let t=q();t.unshift(e),localStorage.setItem(c,JSON.stringify(t.slice(0,10))),Y()}function Y(){let e=q();if(e.length===0){E.innerHTML=`No recent wallets yet.`;return}E.innerHTML=e.map(e=>{let t=I(e.engine)?`Elapsed: ${(e.elapsed||0).toFixed(2)}s<br>`:`
           Attempts: ${e.attempts||0}<br>
           Speed: ${e.speed||0} wallets/sec<br>
         `;return`
@@ -254,7 +294,7 @@
 
           <br>
 
-          Engine: ${P(e.engine)}<br>
+          Engine: ${L(e.engine)}<br>
           ${t}
           Date: ${e.createdAt}
 
@@ -264,19 +304,19 @@
             Copy Public Key
           </button>
         </div>
-      `}).join(``),document.querySelectorAll(`.copyRecentBtn`).forEach(e=>{e.addEventListener(`click`,()=>{let t=e.getAttribute(`data-public-key`);t&&(navigator.clipboard.writeText(t),alert(`Public key copied!`))})})}function q(e){return e<500?`Common`:e<1e4?`Uncommon`:e<5e5?`Rare`:e<2e7?`Epic`:e<2e9?`Legendary`:`Insane`}function J(e){return e===`Common`?`⚪`:e===`Uncommon`?`🟢`:e===`Rare`?`🔵`:e===`Epic`?`🟣`:e===`Legendary`?`🟡`:`🔥`}function Y(e){if(e<1)return`less than 1 second`;if(e<60)return Math.round(e)+` seconds`;let t=e/60;if(t<60)return Math.round(t)+` minutes`;let n=t/60;if(n<24)return Math.round(n*10)/10+` hours`;let r=n/24;if(r<365)return Math.round(r*10)/10+` days`;let i=r/365;return Math.round(i*10)/10+` years`}function X(e,t){if(!t)return 1;let n=1;for(let t of e){let e=t.toLowerCase(),r=t.toUpperCase(),i=!s.includes(e),a=!s.includes(r);e!==r&&i&&a&&(n*=2)}return n}function Z(){_.value===`bothEnds`?T.classList.remove(`hidden`):T.classList.add(`hidden`)}function Q(){let e=R(),t=z(),n=_.value,r=b.checked;if(Z(),!e){w.innerHTML=`Enter a pattern to see estimated difficulty.`;return}if(V(e)||V(t)){w.innerHTML=`
+      `}).join(``),document.querySelectorAll(`.copyRecentBtn`).forEach(e=>{e.addEventListener(`click`,()=>{let t=e.getAttribute(`data-public-key`);t&&(navigator.clipboard.writeText(t),alert(`Public key copied!`))})})}function X(e){return e<500?`Common`:e<1e4?`Uncommon`:e<5e5?`Rare`:e<2e7?`Epic`:e<2e9?`Legendary`:`Insane`}function re(e){return e===`Common`?`⚪`:e===`Uncommon`?`🟢`:e===`Rare`?`🔵`:e===`Epic`?`🟣`:e===`Legendary`?`🟡`:`🔥`}function ie(e){if(e<1)return`less than 1 second`;if(e<60)return Math.round(e)+` seconds`;let t=e/60;if(t<60)return Math.round(t)+` minutes`;let n=t/60;if(n<24)return Math.round(n*10)/10+` hours`;let r=n/24;if(r<365)return Math.round(r*10)/10+` days`;let i=r/365;return Math.round(i*10)/10+` years`}function Z(e,t){if(!t)return 1;let n=1;for(let t of e){let e=t.toLowerCase(),r=t.toUpperCase(),i=!s.includes(e),a=!s.includes(r);e!==r&&i&&a&&(n*=2)}return n}function ae(){x.value===`bothEnds`?O.classList.remove(`hidden`):O.classList.add(`hidden`)}function Q(){let e=V(),t=H(),n=x.value,r=w.checked;if(ae(),!e){D.innerHTML=`Enter a pattern to see estimated difficulty.`;return}if(W(e)||W(t)){D.innerHTML=`
       <strong>Invalid pattern</strong><br>
-      Not allowed: ${[...H(e),...H(t)].join(`, `)}
-    `;return}if(n===`bothEnds`&&!t){w.innerHTML=`
+      Not allowed: ${[...G(e),...G(t)].join(`, `)}
+    `;return}if(n===`bothEnds`&&!t){D.innerHTML=`
       <strong>Start AND end mode</strong><br>
       Enter both a start pattern and an end pattern.<br><br>
       Example: start = CBS, end = SOL
-    `;return}let i=e.length,a=X(e,r),s=1;n===`both`&&(s=2),n===`anywhere`&&(s=Math.max(1,l-e.length+1)),n===`bothEnds`&&(i=e.length+t.length,a=X(e,r)*X(t,r));let c=Math.round(58**i/a/s),u=c/(o>0?o:5e4),d=q(c);w.innerHTML=`
-    <strong>Rarity:</strong> ${J(d)} ${d}<br>
+    `;return}let i=e.length,a=Z(e,r),s=1;n===`both`&&(s=2),n===`anywhere`&&(s=Math.max(1,l-e.length+1)),n===`bothEnds`&&(i=e.length+t.length,a=Z(e,r)*Z(t,r));let c=Math.round(58**i/a/s),u=c/(o>0?o:5e4),d=X(c);D.innerHTML=`
+    <strong>Rarity:</strong> ${re(d)} ${d}<br>
     <strong>Average attempts:</strong> ${c.toLocaleString()}<br>
-    <strong>Estimated average time:</strong> ${Y(u)}<br>
+    <strong>Estimated average time:</strong> ${ie(u)}<br>
     <small>This is an average estimate. It can be found much faster or much slower.</small>
-  `}function $(e){let t=U(),n=((Date.now()-a)/1e3).toFixed(1),i=y.value===`kit`;O(`
+  `}function $(e){let t=K(),n=((Date.now()-a)/1e3).toFixed(1),i=C.value===`kit`;j(`
     <div class="status-searching">
       <strong>Searching...</strong>
 
@@ -313,7 +353,7 @@
 
       ${i?`Searching for vanity address with Solana Kit...`:`wallets/sec`}
     </div>
-  `),Q()}function te(){let e=v.value,t=navigator.hardwareConcurrency||4;return e===`auto`?Math.max(1,Math.floor(t/2)):e===`max`?t:Number(e)}function ne(e,t){let n=`CBS Local Wallet Generator
+  `),Q()}function oe(){let e=S.value,t=navigator.hardwareConcurrency||4;return e===`auto`?Math.max(1,Math.floor(t/2)):e===`max`?t:Number(e)}function se(e,t){let n=`CBS Local Wallet Generator
 
 ==============================
 
@@ -337,26 +377,26 @@ IMPORT INSTRUCTIONS:
 WARNING:
 Never share your private key.
 Anyone with this key has full access to your wallet.
-`,r=new Blob([n],{type:`text/plain`}),i=URL.createObjectURL(r),a=document.createElement(`a`);a.href=i,a.download=`wallet-`+e+`.txt`,a.click(),URL.revokeObjectURL(i)}function re(e,t){let n=Array.from(e),r=new Blob([JSON.stringify(n)],{type:`application/json`}),i=URL.createObjectURL(r),a=document.createElement(`a`);a.href=i,a.download=`wallet-`+t+`.json`,a.click(),URL.revokeObjectURL(i)}_.addEventListener(`change`,()=>{F()}),b.addEventListener(`change`,Q),v.addEventListener(`change`,Q),y.addEventListener(`change`,Q),C?.addEventListener(`click`,()=>{localStorage.removeItem(c),K()}),f?.addEventListener(`click`,()=>{B(),O(`
+`,r=new Blob([n],{type:`text/plain`}),i=URL.createObjectURL(r),a=document.createElement(`a`);a.href=i,a.download=`wallet-`+e+`.txt`,a.click(),URL.revokeObjectURL(i)}function ce(e,t){let n=Array.from(e),r=new Blob([JSON.stringify(n)],{type:`application/json`}),i=URL.createObjectURL(r),a=document.createElement(`a`);a.href=i,a.download=`wallet-`+t+`.json`,a.click(),URL.revokeObjectURL(i)}x.addEventListener(`change`,()=>{R()}),w.addEventListener(`change`,Q),S.addEventListener(`change`,Q),C.addEventListener(`change`,Q),ne?.addEventListener(`click`,()=>{localStorage.removeItem(c),Y()}),g?.addEventListener(`click`,()=>{U(),j(`
     <div class="status-searching">
       Search stopped.
     </div>
-  `)}),d?.addEventListener(`click`,()=>{let e=R(),t=z(),o=_.value,s=te(),c=b.checked;if(!e){O(`
+  `)}),h?.addEventListener(`click`,()=>{let e=V(),t=H(),o=x.value,s=oe(),c=w.checked;if(!e){j(`
       <div class="status-searching">
         Please enter a pattern.
       </div>
-    `);return}if(o===`bothEnds`&&!t){O(`
+    `);return}if(o===`bothEnds`&&!t){j(`
       <div class="status-searching">
         Please enter an end pattern for Start AND end mode.
       </div>
-    `);return}if(V(e)||V(t)){O(`
+    `);return}if(W(e)||W(t)){j(`
       <div class="status-searching">
         <strong>Invalid pattern</strong><br><br>
         These characters are not allowed in Solana Base58 addresses:<br><br>
-        <strong>${[...H(e),...H(t)].join(`, `)}</strong><br><br>
+        <strong>${[...G(e),...G(t)].join(`, `)}</strong><br><br>
         Please remove them and try again.
       </div>
-    `);return}if(B(),n=!0,r=0,a=Date.now(),j(),y.value===`kit`){let e=setInterval(()=>{if(!n){clearInterval(e);return}$(s)},100)}$(s);for(let a=0;a<s;a++){let a;a=y.value===`kit`?new Worker(new URL(``+new URL(`kitWorker-nI_jW3qk.js`,import.meta.url).href,``+import.meta.url),{type:`module`}):new Worker(new URL(``+new URL(`walletWorker-D-e_X1Yr.js`,import.meta.url).href,``+import.meta.url),{type:`module`}),a.onmessage=i=>{if(n&&(i.data.type===`attempt`&&(r++,r%1e3==0&&$(s)),i.data.type!==`started`&&i.data.type===`found`)){let n=i.data.publicKey,a=i.data.privateKey,c=new Uint8Array(i.data.secretKey),l=i.data.engine||y.value,u=i.data.seconds||0;B();let d=U(),f=o===`bothEnds`?e+`...`+t:e,p=N(l);G({publicKey:n,pattern:f,position:o,engine:p?`Kit`:`web3.js`,attempts:p?void 0:r,speed:p?void 0:d,elapsed:p?u:void 0,createdAt:new Date().toLocaleString()}),O(`
+    `);return}if(U(),n=!0,r=0,a=Date.now(),P(),C.value===`kit`){let e=setInterval(()=>{if(!n){clearInterval(e);return}$(s)},100)}$(s);for(let a=0;a<s;a++){let a;a=C.value===`kit`?new Worker(new URL(``+new URL(`kitWorker-nI_jW3qk.js`,import.meta.url).href,``+import.meta.url),{type:`module`}):new Worker(new URL(``+new URL(`walletWorker-D-e_X1Yr.js`,import.meta.url).href,``+import.meta.url),{type:`module`}),a.onmessage=i=>{if(n&&(i.data.type===`attempt`&&(r++,r%1e3==0&&$(s)),i.data.type!==`started`&&i.data.type===`found`)){let n=i.data.publicKey,a=i.data.privateKey,c=new Uint8Array(i.data.secretKey),l=i.data.engine||C.value,u=i.data.seconds||0;U();let d=K(),f=o===`bothEnds`?e+`...`+t:e,p=I(l);J({publicKey:n,pattern:f,position:o,engine:p?`Kit`:`web3.js`,attempts:p?void 0:r,speed:p?void 0:d,elapsed:p?u:void 0,createdAt:new Date().toLocaleString()}),j(`
           <div class="status-found">
             <strong>MATCH FOUND</strong>
 
@@ -397,11 +437,7 @@ Anyone with this key has full access to your wallet.
               <button id="copyPublicBtn">Copy Public Key</button>
             </div>
 
-            <div class="wallet-box">
-              <div class="wallet-title">Private Key</div>
-              <div class="wallet-key">${a}</div>
-              <button id="copyPrivateBtn">Copy Private Key</button>
-            </div>
+            ${ee()}
 
             <button id="downloadBtn">Download Wallet Backup (.txt)</button>
             <button id="downloadJsonBtn">Download JSON Keypair</button>
@@ -419,4 +455,4 @@ Anyone with this key has full access to your wallet.
               Keep this file offline. Never share your private key.
             </p>
           </div>
-        `),A(n,a,c)}},a.postMessage({pattern:e,endPattern:t,position:o,ignoreCase:c}),i.push(a)}}),K(),F(),ae(),ie();function ie(){let e=document.getElementById(`donationCopyBtn`),t=document.getElementById(`donationConfirm`);if(!e||!t)return;let n;e.addEventListener(`click`,async()=>{try{await navigator.clipboard.writeText(u),t.hidden=!1,t.textContent=`Address copied.`}catch{t.hidden=!1,t.textContent=`Copy failed. Select the wallet address above and copy manually.`}n!==void 0&&window.clearTimeout(n),n=window.setTimeout(()=>{t.hidden=!0,t.textContent=`Address copied.`},2400)})}function ae(){let e=document.querySelectorAll(`.reveal`);if(`IntersectionObserver`in window){let t=new IntersectionObserver(e=>{for(let n of e)n.isIntersecting&&(n.target.classList.add(`visible`),t.unobserve(n.target))},{threshold:.15});e.forEach(e=>t.observe(e))}else e.forEach(e=>e.classList.add(`visible`))}
+        `),N(n,a,c)}},a.postMessage({pattern:e,endPattern:t,position:o,ignoreCase:c}),i.push(a)}}),Y(),R(),ue(),le();function le(){let e=document.getElementById(`donationCopyBtn`),t=document.getElementById(`donationConfirm`);if(!e||!t)return;let n;e.addEventListener(`click`,async()=>{try{await navigator.clipboard.writeText(u),t.hidden=!1,t.textContent=`Address copied.`}catch{t.hidden=!1,t.textContent=`Copy failed. Select the wallet address above and copy manually.`}n!==void 0&&window.clearTimeout(n),n=window.setTimeout(()=>{t.hidden=!0,t.textContent=`Address copied.`},2400)})}function ue(){let e=document.querySelectorAll(`.reveal`);if(`IntersectionObserver`in window){let t=new IntersectionObserver(e=>{for(let n of e)n.isIntersecting&&(n.target.classList.add(`visible`),t.unobserve(n.target))},{threshold:.15});e.forEach(e=>t.observe(e))}else e.forEach(e=>e.classList.add(`visible`))}
