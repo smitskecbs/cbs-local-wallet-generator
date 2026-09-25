@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Address generator">
+  <defs>
+    <linearGradient id="g" x1="5" y1="5" x2="27" y2="27" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#03E1FF"/>
+      <stop offset="0.5" stop-color="#7B61FF"/>
+      <stop offset="1" stop-color="#B24BFF"/>
+    </linearGradient>
+  </defs>
+  <!-- Local viewport -->
+  <rect x="4.5" y="4.5" width="23" height="23" rx="7" fill="none" stroke="url(#g)" stroke-width="2.4"/>
+  <!-- Emerging custom address (two unequal segments, not a list) -->
+  <path d="M9.5 13.2h9.5" fill="none" stroke="url(#g)" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M9.5 19h14" fill="none" stroke="url(#g)" stroke-width="2.8" stroke-linecap="round"/>
+  <!-- Growth nodes -->
+  <circle cx="21.2" cy="13.2" r="1.9" fill="#03E1FF"/>
+  <circle cx="25.5" cy="19" r="1.9" fill="#B24BFF"/>
+</svg>

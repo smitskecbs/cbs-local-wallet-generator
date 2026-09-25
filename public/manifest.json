@@ -1,16 +1,23 @@
 {
-  "name": "CBS Local Wallet Generator",
-  "short_name": "CBS Wallet",
+  "name": "Solana Address Generator",
+  "short_name": "Address Generator",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#f5efe6",
-  "theme_color": "#d86f00",
+  "background_color": "#04060f",
+  "theme_color": "#04060f",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "./assets/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }

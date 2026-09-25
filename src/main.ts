@@ -1,1047 +1,1434 @@
 import './style.css'
-import banner from './assets/banner.png'
+import {
+  estimateDifficulty,
+  formatEstimatedTime,
+} from './vanity/difficulty'
+import { ensureEd25519Support } from './vanity/ed25519'
+import {
+  buildKeyBackupFilename,
+  buildWalletBackupText,
+  downloadTextFile,
+  wipeSecretMaterial,
+} from './vanity/export'
+import { showConfirmDialog } from './vanity/confirmDialog'
+import { renderPrivateKeyQrSvg } from './vanity/privateKeyQr'
+import {
+  type FoundBackupStatus,
+  lifecycleFromBackupStatus,
+  markConfirmed,
+  markDownloaded,
+  requiresDiscardWarning,
+} from './vanity/foundSession'
+import {
+  type SearchPosition,
+  UX_MAX_VANITY_CHARS,
+  getPatternFieldFeedback,
+  validateSearchPatterns,
+} from './vanity/matching'
+import {
+  clearRecentWallets,
+  loadRecentWallets,
+  saveRecentWallet,
+  type RecentWallet,
+} from './vanity/recentWallets'
+import {
+  describeSearchTarget,
+  formatElapsed,
+  SearchController,
+  type FoundWallet,
+  type SearchProgress,
+} from './vanity/searchController'
+import {
+  detectMobile,
+  resolveWorkerPlan,
+  type PerformancePreset,
+} from './vanity/workers'
 
 const app = document.querySelector<HTMLDivElement>('#app')
-
 if (!app) {
   throw new Error('App element not found')
 }
 
-let isSearching = false
-let attempts = 0
-let workers: Worker[] = []
-let startTime = 0
-let lastMeasuredSpeed = 0
-
-const blockedCharacters = ['0', 'O', 'I', 'l']
-const recentWalletsKey = 'cbs-recent-wallets'
-const averageSolanaAddressLength = 44
-
-type RecentWallet = {
-  publicKey: string
-  pattern: string
-  position: string
-  attempts?: number
-  speed?: number
-  elapsed?: number
-  engine?: string
-  createdAt: string
-}
-
 const donationWallet = 'ManGofryUWC5VWk7t4ATP32qJtGVBBNoVi2AQ9HyR9J'
 
-app.innerHTML = `
-  <main class="app-shell">
-    <header class="site-hero" aria-labelledby="hero-heading">
-      <img
-        id="hero-heading"
-        class="site-banner"
-        src="${banner}"
-        alt="CBS Wallet Generator"
-      />
-      <p class="site-hero-subtitle">
-        Create custom Solana wallet addresses locally in your browser.
-      </p>
-    </header>
+type UiMode = 'idle' | 'searching' | 'stopped' | 'found' | 'error'
 
-    <section class="page-section">
-      <div class="page-overview edu-block reveal">
-        <p class="edu-block-title">Page overview</p>
-        <h1 class="edu-block-heading">CBS Wallet Generator</h1>
-        <p class="edu-block-text">
-          Search for a Solana wallet address that contains your chosen word at the start,
-          end, or both. Keys are generated on your device and never sent to a server.
-        </p>
-        <ol class="edu-block-list">
-          <li>Enter a short word like CBS or BONK.</li>
-          <li>Click Generate Wallet.</li>
-          <li>When a match is found, save your wallet backup safely.</li>
-        </ol>
-      </div>
-    </section>
-
-    <section class="page-section card reveal">
-      <h2>Generate Wallet</h2>
-
-      <div class="import-box reveal">
-        <strong>Safety notice</strong><br><br>
-        Never share your private key.<br>
-        Anyone with your private key can access your wallet.
-      </div>
-
-      <label>Where should the word appear?</label>
-      <select id="position">
-        <option value="prefix">Start of wallet</option>
-        <option value="suffix">End of wallet</option>
-        <option value="both">Start OR end of wallet</option>
-        <option value="bothEnds">Start AND end of wallet</option>
-        <option value="anywhere">Anywhere in wallet</option>
-      </select>
-
-      <div id="patternFields"></div>
-
-      <div class="checkbox-row">
-        <input id="ignoreCase" type="checkbox" />
-        <label for="ignoreCase">Match uppercase and lowercase</label>
-      </div>
-
-      <p>Invalid characters: 0 O I l</p>
-
-      <div id="estimateBox" class="import-box reveal">
-        Enter a pattern to see estimated difficulty.
-      </div>
-
-      <div id="advancedWarning" class="advanced-warning hidden">
-        ⚠ Start AND end mode is extremely difficult and CPU intensive.
-        Use short patterns first.
-      </div>
-
-      <div id="advancedOptions" class="collapsed">
-        <label>Engine</label>
-        <select id="engine">
-          <option value="kit" selected>Solana Kit</option>
-          <option value="web3">web3.js (Legacy)</option>
-        </select>
-
-        <div class="engine-info">
-          <strong>Engine info</strong><br>
-          Solana Kit is the modern default engine.<br>
-          web3.js is kept as legacy fallback mode.
-        </div>
-
-        <label>Workers</label>
-        <select id="workerCount">
-          <option value="auto" selected>Auto Recommended</option>
-          <option value="1">1 Worker</option>
-          <option value="2">2 Workers</option>
-          <option value="4">4 Workers</option>
-          <option value="8">8 Workers</option>
-          <option value="max">Max Device Threads</option>
-        </select>
-      </div>
-
-      <div class="button-row">
-        <button id="startBtn" type="button">Generate Wallet</button>
-        <button id="stopBtn" class="secondary-btn" type="button">Stop</button>
-        <button id="toggleAdvancedBtn" class="secondary-btn" type="button">
-          Show Advanced
-        </button>
-      </div>
-    </section>
-
-    <section class="page-section card reveal">
-      <h2>Status</h2>
-      <div id="status">Waiting...</div>
-    </section>
-
-    <div id="statusModal" class="modal-overlay hidden">
-      <div class="modal-panel">
-        <div class="modal-header">
-          <div>
-            <h2>Generation Status</h2>
-            <p class="modal-subtitle">Live search progress</p>
-          </div>
-          <button id="closeModalBtn" class="modal-close secondary-btn" type="button">×</button>
-        </div>
-        <div id="modalStatus" class="modal-status">
-          Waiting...
-        </div>
-        <div class="modal-actions">
-          <button id="modalStopBtn" class="secondary-btn" type="button">Stop</button>
-        </div>
-      </div>
-    </div>
-
-    <section class="page-section card reveal">
-      <h2>Recent Found Wallets</h2>
-      <div id="recentWallets">No recent wallets yet.</div>
-      <button id="clearRecentBtn" class="secondary-btn" type="button">Clear Recent Wallets</button>
-    </section>
-
-    <section class="support-section" aria-labelledby="support-title">
-      <div class="support-card">
-        <p class="support-title" id="support-title">Support CBS Ecosystem</p>
-        <p class="support-text">
-          Optional donations help fund development and infrastructure.
-        </p>
-        <code class="support-wallet" data-donation-wallet>${donationWallet}</code>
-        <button
-          type="button"
-          class="secondary-btn support-copy-btn"
-          id="donationCopyBtn"
-        >
-          Copy address
-        </button>
-        <p
-          class="support-confirm"
-          id="donationConfirm"
-          hidden
-          aria-live="polite"
-        >
-          Address copied.
-        </p>
-      </div>
-    </section>
-
-    <footer class="site-footer reveal">
-      <nav class="footer-links" aria-label="CBS ecosystem">
-        <a href="https://tools.cbs-coin.com" target="_blank" rel="noopener noreferrer">CBS Tools</a>
-        <a href="https://cbs-coin.com" target="_blank" rel="noopener noreferrer">CBS Coin</a>
-      </nav>
-      <section class="footer-open-source" aria-labelledby="footer-open-title">
-        <h2 class="footer-open-title" id="footer-open-title">Built in the Open</h2>
-        <p class="footer-open-text">
-          CBS Tools is developed publicly and transparently.
-          Source code, improvements and community contributions can be followed on GitHub.
-        </p>
-        <a
-          class="footer-github-link"
-          href="https://github.com/smitskecbs"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Visit CBS on GitHub"
-        >
-          <svg class="footer-github-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-            <path
-              d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"
-              fill="currentColor"
-            />
-          </svg>
-          <span>GitHub</span>
-        </a>
-        <p class="footer-badge-row">
-          Open Source • Community Driven • Built on Solana
-        </p>
-      </section>
-      <p class="site-footer-copy">Community-built tools for Solana builders.</p>
-    </footer>
-  </main>
-`
-
-const startBtn = document.getElementById('startBtn')
-const stopBtn = document.getElementById('stopBtn')
-const status = document.getElementById('status')
-const statusModal = document.getElementById('statusModal')
-const modalStatus = document.getElementById('modalStatus')
-const modalStopBtn = document.getElementById('modalStopBtn')
-const closeModalBtn = document.getElementById('closeModalBtn')
-const positionSelect = document.getElementById('position') as HTMLSelectElement
-const workerCountSelect = document.getElementById('workerCount') as HTMLSelectElement
-const engineSelect = document.getElementById('engine') as HTMLSelectElement
-const ignoreCaseInput = document.getElementById('ignoreCase') as HTMLInputElement
-const patternFields = document.getElementById('patternFields')
-const recentWallets = document.getElementById('recentWallets')
-const clearRecentBtn = document.getElementById('clearRecentBtn')
-const estimateBox = document.getElementById('estimateBox')
-const advancedWarning = document.getElementById('advancedWarning')
-const toggleAdvancedBtn =
-  document.getElementById('toggleAdvancedBtn')
-
-const advancedOptions =
-  document.getElementById('advancedOptions')
-
-toggleAdvancedBtn?.addEventListener('click', () => {
-  advancedOptions?.classList.toggle('collapsed')
-
-  const isHidden =
-    advancedOptions?.classList.contains('collapsed')
-
-  toggleAdvancedBtn.textContent = isHidden
-    ? 'Show Advanced'
-    : 'Hide Advanced'
-})
-
-function setStatusHtml(html: string) {
-  if (status) status.innerHTML = html
-  if (modalStatus) modalStatus.innerHTML = html
+type SessionWallet = FoundWallet & {
+  revealed: boolean
+  qrVisible: boolean
+  backupStatus: FoundBackupStatus
 }
 
-function bindWalletActionButtons(
-  container: ParentNode | null,
-  publicKey: string,
-  privateKey: string,
-  secretKey: Uint8Array
-) {
-  if (!container) return
-
-  container.querySelector<HTMLButtonElement>('#copyPublicBtn')?.addEventListener('click', () => {
-    navigator.clipboard.writeText(publicKey)
-    alert('Public key copied!')
-  })
-
-  container.querySelector<HTMLButtonElement>('#copyPrivateBtn')?.addEventListener('click', () => {
-    navigator.clipboard.writeText(privateKey)
-    alert('Private key copied!')
-  })
-
-  container.querySelector<HTMLButtonElement>('#downloadBtn')?.addEventListener('click', () => {
-    downloadWalletBackup(publicKey, privateKey)
-  })
-
-  container.querySelector<HTMLButtonElement>('#downloadJsonBtn')?.addEventListener('click', () => {
-    downloadJsonKeypair(secretKey, publicKey)
-  })
+type FormSnapshot = {
+  positionPrimary: 'prefix' | 'suffix' | 'anywhere'
+  positionAdvanced: '' | 'both' | 'bothEnds'
+  pattern: string
+  endPattern: string
+  caseSensitive: boolean
+  performance: PerformancePreset
+  advancedOpen: boolean
 }
 
-function attachWalletActionHandlers(
-  publicKey: string,
-  privateKey: string,
-  secretKey: Uint8Array
-) {
-  bindWalletActionButtons(status, publicKey, privateKey, secretKey)
-  bindWalletActionButtons(modalStatus, publicKey, privateKey, secretKey)
+type ActiveSearchView = {
+  searchId: number
+  pattern: string
+  endPattern: string
+  position: SearchPosition
+  caseSensitive: boolean
+  performance: PerformancePreset
 }
 
-function openStatusModal() {
-  if (!statusModal) return
-  statusModal.classList.remove('hidden')
-  setTimeout(() => {
-    statusModal.classList.add('open')
-  }, 20)
+let uiMode: UiMode = 'idle'
+let lastMeasuredSpeed = 0
+let needsPolyfill = false
+let sessionWallet: SessionWallet | null = null
+let ed25519Ready = false
+let formSnapshot: FormSnapshot = {
+  positionPrimary: 'prefix',
+  positionAdvanced: '',
+  pattern: '',
+  endPattern: '',
+  caseSensitive: false,
+  performance: 'auto',
+  advancedOpen: false,
 }
+let activeSearchView: ActiveSearchView | null = null
+let searchingShellReady = false
+let beforeUnloadArmed = false
 
-function closeStatusModal() {
-  if (!statusModal) return
-  statusModal.classList.remove('open')
-  statusModal.addEventListener(
-    'transitionend',
-    () => {
-      statusModal.classList.add('hidden')
-    },
-    { once: true }
-  )
-}
-
-modalStopBtn?.addEventListener('click', () => {
-  stopBtn?.click()
-})
-
-closeModalBtn?.addEventListener('click', () => {
-  closeStatusModal()
-})
-
-function isKitEngineValue(engine?: string) {
-  const value = (engine || '').toLowerCase()
-
-  return (
-    value === 'kit' ||
-    value === 'solana-kit' ||
-    value === 'solana kit'
-  )
-}
-
-function getEngineLabel(engine?: string) {
-  return isKitEngineValue(engine) ? 'Kit' : 'web3.js'
-}
-
-function renderPatternFields() {
-  const position = positionSelect.value
-
-  if (position === 'prefix') {
-    patternFields!.innerHTML = `
-      <label>Start pattern</label>
-      <input id="pattern" maxlength="5" placeholder="Example: CBS" />
-    `
+function onBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!sessionWallet || !requiresDiscardWarning(sessionWallet.backupStatus)) {
+    return
   }
-
-  if (position === 'suffix') {
-    patternFields!.innerHTML = `
-      <label>End pattern</label>
-      <input id="pattern" maxlength="5" placeholder="Example: BONK" />
-    `
-  }
-
-  if (position === 'both') {
-    patternFields!.innerHTML = `
-      <label>Pattern</label>
-      <input id="pattern" maxlength="5" placeholder="Example: SOL" />
-    `
-  }
-
-  if (position === 'bothEnds') {
-    patternFields!.innerHTML = `
-      <label>Start pattern</label>
-      <input id="pattern" maxlength="5" placeholder="Example: CBS" />
-
-      <label>End pattern</label>
-      <input id="endPattern" maxlength="5" placeholder="Example: SOL" />
-    `
-  }
-
-  if (position === 'anywhere') {
-    patternFields!.innerHTML = `
-      <label>Pattern</label>
-      <input id="pattern" maxlength="5" placeholder="Example: CBS" />
-      <p>Anywhere in wallet: xxxCBSxxx</p>
-    `
-  }
-
-  getPatternInput()?.addEventListener('input', updateEstimate)
-  getEndPatternInput()?.addEventListener('input', updateEstimate)
-
-  updateEstimate()
+  event.preventDefault()
+  event.returnValue = ''
 }
 
-function getPatternInput() {
-  return document.getElementById('pattern') as HTMLInputElement | null
-}
+function syncBeforeUnloadProtection(): void {
+  const needsProtection =
+    !!sessionWallet && requiresDiscardWarning(sessionWallet.backupStatus)
 
-function getEndPatternInput() {
-  return document.getElementById('endPattern') as HTMLInputElement | null
-}
-
-function getPatternValue() {
-  return getPatternInput()?.value.trim() || ''
-}
-
-function getEndPatternValue() {
-  return getEndPatternInput()?.value.trim() || ''
-}
-
-function stopWorkers() {
-  isSearching = false
-  workers.forEach((worker) => worker.terminate())
-  workers = []
-}
-
-function hasBlockedCharacters(value: string) {
-  return blockedCharacters.some((character) => value.includes(character))
-}
-
-function getBlockedCharacters(value: string) {
-  return blockedCharacters.filter((character) => value.includes(character))
-}
-
-function getSpeed() {
-  const seconds = (Date.now() - startTime) / 1000
-  if (seconds <= 0) return 0
-
-  const speed = Math.round(attempts / seconds)
-  if (speed > 0) lastMeasuredSpeed = speed
-
-  return speed
-}
-
-function getRecentWallets(): RecentWallet[] {
-  const saved = localStorage.getItem(recentWalletsKey)
-  if (!saved) return []
-
-  try {
-    return JSON.parse(saved)
-  } catch {
-    return []
-  }
-}
-
-function saveRecentWallet(wallet: RecentWallet) {
-  const wallets = getRecentWallets()
-  wallets.unshift(wallet)
-
-  localStorage.setItem(
-    recentWalletsKey,
-    JSON.stringify(wallets.slice(0, 10))
-  )
-
-  renderRecentWallets()
-}
-
-function renderRecentWallets() {
-  const wallets = getRecentWallets()
-
-  if (wallets.length === 0) {
-    recentWallets!.innerHTML = 'No recent wallets yet.'
+  if (needsProtection && !beforeUnloadArmed) {
+    window.addEventListener('beforeunload', onBeforeUnload)
+    beforeUnloadArmed = true
     return
   }
 
-  recentWallets!.innerHTML = wallets
-    .map((wallet) => {
-      const isKitWallet = isKitEngineValue(wallet.engine)
-
-      const walletStats = isKitWallet
-        ? `Elapsed: ${(wallet.elapsed || 0).toFixed(2)}s<br>`
-        : `
-          Attempts: ${wallet.attempts || 0}<br>
-          Speed: ${wallet.speed || 0} wallets/sec<br>
-        `
-
-      return `
-        <div class="wallet-box">
-          <div class="wallet-title">
-            ${wallet.pattern} / ${wallet.position}
-          </div>
-
-          <div class="wallet-key">
-            ${wallet.publicKey}
-          </div>
-
-          <br>
-
-          Engine: ${getEngineLabel(wallet.engine)}<br>
-          ${walletStats}
-          Date: ${wallet.createdAt}
-
-          <br><br>
-
-          <button class="copyRecentBtn" data-public-key="${wallet.publicKey}">
-            Copy Public Key
-          </button>
-        </div>
-      `
-    })
-    .join('')
-
-  document.querySelectorAll('.copyRecentBtn').forEach((button) => {
-    button.addEventListener('click', () => {
-      const publicKey = button.getAttribute('data-public-key')
-      if (!publicKey) return
-
-      navigator.clipboard.writeText(publicKey)
-      alert('Public key copied!')
-    })
-  })
+  if (!needsProtection && beforeUnloadArmed) {
+    window.removeEventListener('beforeunload', onBeforeUnload)
+    beforeUnloadArmed = false
+  }
 }
 
-function getDifficulty(averageAttempts: number) {
-  if (averageAttempts < 500) return 'Common'
-  if (averageAttempts < 10000) return 'Uncommon'
-  if (averageAttempts < 500000) return 'Rare'
-  if (averageAttempts < 20000000) return 'Epic'
-  if (averageAttempts < 2000000000) return 'Legendary'
-  return 'Insane'
-}
-
-function getDifficultyEmoji(difficulty: string) {
-  if (difficulty === 'Common') return '⚪'
-  if (difficulty === 'Uncommon') return '🟢'
-  if (difficulty === 'Rare') return '🔵'
-  if (difficulty === 'Epic') return '🟣'
-  if (difficulty === 'Legendary') return '🟡'
-  return '🔥'
-}
-
-function formatEstimatedTime(seconds: number) {
-  if (seconds < 1) return 'less than 1 second'
-  if (seconds < 60) return Math.round(seconds) + ' seconds'
-
-  const minutes = seconds / 60
-  if (minutes < 60) return Math.round(minutes) + ' minutes'
-
-  const hours = minutes / 60
-  if (hours < 24) return Math.round(hours * 10) / 10 + ' hours'
-
-  const days = hours / 24
-  if (days < 365) return Math.round(days * 10) / 10 + ' days'
-
-  const years = days / 365
-  return Math.round(years * 10) / 10 + ' years'
-}
-
-function getCaseMultiplier(pattern: string, ignoreCase: boolean) {
-  if (!ignoreCase) return 1
-
-  let multiplier = 1
-
-  for (const character of pattern) {
-    const lower = character.toLowerCase()
-    const upper = character.toUpperCase()
-
-    const lowerAllowed = !blockedCharacters.includes(lower)
-    const upperAllowed = !blockedCharacters.includes(upper)
-
-    if (lower !== upper && lowerAllowed && upperAllowed) {
-      multiplier *= 2
+const searchController = new SearchController({
+  onProgress: (progress) => {
+    if (progress.speed > 0) {
+      lastMeasuredSpeed = progress.speed
     }
-  }
+    updateSearchingMetrics(progress)
+  },
+  onFound: (wallet, searchId) => {
+    if (activeSearchView && searchId !== activeSearchView.searchId) return
+    // Assign the new result first — do not wipe via clearSessionWallet before
+    // the new keypair is held (clear only previous if any).
+    if (sessionWallet) {
+      wipeSecretMaterial(sessionWallet)
+    }
+    sessionWallet = {
+      ...wallet,
+      revealed: false,
+      qrVisible: false,
+      backupStatus: 'unsecured',
+    }
+    syncBeforeUnloadProtection()
+    if (activeSearchView) {
+      saveRecentWallet({
+        publicKey: wallet.publicKey,
+        pattern: describeSearchTarget(
+          activeSearchView.pattern,
+          activeSearchView.endPattern,
+          activeSearchView.position
+        ),
+        position: activeSearchView.position,
+        createdAt: new Date().toLocaleString(),
+      })
+      renderRecentWallets()
+    }
+    setMode('found')
+    renderFound()
+  },
+  onError: (message, searchId) => {
+    if (activeSearchView && searchId !== activeSearchView.searchId) return
+    setMode('error')
+    renderError(message)
+  },
+  onStopped: (searchId) => {
+    if (activeSearchView && searchId !== activeSearchView.searchId) return
+    setMode('stopped')
+    renderStopped()
+  },
+})
 
-  return multiplier
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
 }
 
-function updateAdvancedWarning() {
-  if (positionSelect.value === 'bothEnds') {
-    advancedWarning!.classList.remove('hidden')
-  } else {
-    advancedWarning!.classList.add('hidden')
+function clearSessionWallet(): void {
+  if (!sessionWallet) return
+  hidePrivateKeyQr()
+  wipeSecretMaterial(sessionWallet)
+  sessionWallet = null
+  syncBeforeUnloadProtection()
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString('en-US')
+}
+
+function setMode(mode: UiMode): void {
+  uiMode = mode
+  document.querySelector('#generatorCard')?.setAttribute('data-mode', mode)
+  if (mode !== 'searching') {
+    searchingShellReady = false
   }
 }
 
-function updateEstimate() {
-  const pattern = getPatternValue()
-  const endPattern = getEndPatternValue()
-  const position = positionSelect.value
-  const ignoreCase = ignoreCaseInput.checked
+function captureFormSnapshot(): FormSnapshot {
+  const primary =
+    document.querySelector<HTMLInputElement>(
+      'input[name="positionPrimary"]:checked'
+    )?.value || formSnapshot.positionPrimary
+  const advancedRaw =
+    document.querySelector<HTMLInputElement>(
+      'input[name="positionAdvanced"]:checked'
+    )?.value ?? formSnapshot.positionAdvanced
+  const performance =
+    (document.querySelector<HTMLSelectElement>('#performance')?.value as
+      | PerformancePreset
+      | undefined) || formSnapshot.performance
 
-  updateAdvancedWarning()
+  return {
+    positionPrimary:
+      primary === 'suffix' || primary === 'anywhere' ? primary : 'prefix',
+    positionAdvanced:
+      advancedRaw === 'both' || advancedRaw === 'bothEnds' ? advancedRaw : '',
+    pattern:
+      document.querySelector<HTMLInputElement>('#pattern')?.value.trim() ||
+      formSnapshot.pattern,
+    endPattern:
+      document.querySelector<HTMLInputElement>('#endPattern')?.value.trim() ||
+      formSnapshot.endPattern,
+    caseSensitive:
+      document.querySelector<HTMLInputElement>('#caseSensitive')?.checked ??
+      formSnapshot.caseSensitive,
+    performance:
+      performance === 'low' ||
+      performance === 'balanced' ||
+      performance === 'maximum' ||
+      performance === 'auto'
+        ? performance
+        : 'auto',
+    advancedOpen:
+      document.querySelector<HTMLDetailsElement>('details.advanced-block')
+        ?.open ?? formSnapshot.advancedOpen,
+  }
+}
 
-  if (!pattern) {
-    estimateBox!.innerHTML = 'Enter a pattern to see estimated difficulty.'
+function getPositionFromSnapshot(snapshot: FormSnapshot): SearchPosition {
+  if (snapshot.positionAdvanced === 'both' || snapshot.positionAdvanced === 'bothEnds') {
+    return snapshot.positionAdvanced
+  }
+  return snapshot.positionPrimary
+}
+
+function updateDifficultyPanel(): void {
+  const panel = document.querySelector('#difficultyPanel')
+  if (!panel) return
+
+  const snapshot = captureFormSnapshot()
+  formSnapshot = snapshot
+  const position = getPositionFromSnapshot(snapshot)
+
+  if (!snapshot.pattern) {
+    panel.innerHTML = `<div class="difficulty-label muted">Enter text to see difficulty.</div>`
     return
   }
 
-  if (hasBlockedCharacters(pattern) || hasBlockedCharacters(endPattern)) {
-    const invalidCharacters = [
-      ...getBlockedCharacters(pattern),
-      ...getBlockedCharacters(endPattern),
-    ].join(', ')
-
-    estimateBox!.innerHTML = `
-      <strong>Invalid pattern</strong><br>
-      Not allowed: ${invalidCharacters}
-    `
-    return
-  }
-
-  if (position === 'bothEnds' && !endPattern) {
-    estimateBox!.innerHTML = `
-      <strong>Start AND end mode</strong><br>
-      Enter both a start pattern and an end pattern.<br><br>
-      Example: start = CBS, end = SOL
-    `
-    return
-  }
-
-  let totalLength = pattern.length
-  let caseMultiplier = getCaseMultiplier(pattern, ignoreCase)
-  let matchMultiplier = 1
-
-  if (position === 'both') {
-    matchMultiplier = 2
-  }
-
-  if (position === 'anywhere') {
-    matchMultiplier = Math.max(
-      1,
-      averageSolanaAddressLength - pattern.length + 1
-    )
-  }
-
-  if (position === 'bothEnds') {
-    totalLength = pattern.length + endPattern.length
-    caseMultiplier =
-      getCaseMultiplier(pattern, ignoreCase) *
-      getCaseMultiplier(endPattern, ignoreCase)
-  }
-
-  const exactAttempts = Math.pow(58, totalLength)
-  const averageAttempts = Math.round(
-    exactAttempts / caseMultiplier / matchMultiplier
+  const validation = validateSearchPatterns(
+    snapshot.pattern,
+    snapshot.endPattern,
+    position
   )
+  if (!validation.ok) {
+    panel.innerHTML = `<div class="difficulty-label danger">${escapeHtml(validation.message)}</div>`
+    return
+  }
 
-  const speed = lastMeasuredSpeed > 0 ? lastMeasuredSpeed : 50000
-  const estimatedSeconds = averageAttempts / speed
-  const difficulty = getDifficulty(averageAttempts)
-  const difficultyEmoji = getDifficultyEmoji(difficulty)
+  const estimate = estimateDifficulty({
+    pattern: snapshot.pattern,
+    endPattern: snapshot.endPattern,
+    position,
+    caseSensitive: snapshot.caseSensitive,
+    measuredSpeed: lastMeasuredSpeed > 0 ? lastMeasuredSpeed : null,
+  })
 
-  estimateBox!.innerHTML = `
-    <strong>Rarity:</strong> ${difficultyEmoji} ${difficulty}<br>
-    <strong>Average attempts:</strong> ${averageAttempts.toLocaleString()}<br>
-    <strong>Estimated average time:</strong> ${formatEstimatedTime(estimatedSeconds)}<br>
-    <small>This is an average estimate. It can be found much faster or much slower.</small>
+  const eta =
+    estimate.estimatedSeconds != null
+      ? ` · ETA ~${formatEstimatedTime(estimate.estimatedSeconds)}`
+      : ''
+
+  panel.innerHTML = `
+    <div class="difficulty-row">
+      <span class="difficulty-kicker">How hard is this address to find?</span>
+      <span class="difficulty-label">${escapeHtml(estimate.label)}</span>
+      <span class="difficulty-meta">~${formatNumber(estimate.expectedAttempts)} attempts${escapeHtml(eta)}</span>
+    </div>
+    <details class="help-details">
+      <summary>What does this mean?</summary>
+      <p class="field-hint">
+        Longer patterns take much longer on average. Estimates use the Base58 alphabet and your recent speed.
+        Vanity search is probabilistic — a match can appear much sooner or later than the ETA.
+      </p>
+    </details>
   `
 }
 
-function updateStatus(workerCount: number) {
-  const speed = getSpeed()
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
-  const isKit = engineSelect.value === 'kit'
+function renderPatternFields(): void {
+  const host = document.querySelector('#patternFields')
+  if (!host) return
 
-  setStatusHtml(`
-    <div class="status-searching">
-      <strong>Searching...</strong>
+  const position = getPositionFromSnapshot(formSnapshot)
+  const placeholder = 'Type your text…'
+  const rule =
+    'Maximum 5 characters · Base58 only'
 
-      <br><br>
+  if (position === 'bothEnds') {
+    host.innerHTML = `
+      <label for="pattern">Starts with</label>
+      <input id="pattern" autocomplete="off" spellcheck="false" placeholder="${placeholder}" value="${escapeHtml(formSnapshot.pattern)}" />
+      <p class="field-rule">${rule}</p>
+      <p class="field-feedback" id="patternFeedback" hidden aria-live="polite"></p>
+      <label for="endPattern">Ends with</label>
+      <input id="endPattern" autocomplete="off" spellcheck="false" placeholder="${placeholder}" value="${escapeHtml(formSnapshot.endPattern)}" />
+      <p class="field-rule">${rule}</p>
+      <p class="field-feedback" id="endPatternFeedback" hidden aria-live="polite"></p>
+    `
+  } else {
+    host.innerHTML = `
+      <label for="pattern">Custom text</label>
+      <input id="pattern" autocomplete="off" spellcheck="false" placeholder="${placeholder}" value="${escapeHtml(formSnapshot.pattern)}" />
+      <p class="field-rule">${rule}</p>
+      <p class="field-feedback" id="patternFeedback" hidden aria-live="polite"></p>
+    `
+  }
 
-      <div class="stat-grid">
+  bindPatternInput('pattern', 'patternFeedback')
+  bindPatternInput('endPattern', 'endPatternFeedback')
+  updateDifficultyPanel()
+}
+
+function bindPatternInput(inputId: string, feedbackId: string): void {
+  const input = document.querySelector<HTMLInputElement>(`#${inputId}`)
+  if (!input) return
+
+  const syncFeedback = () => {
+    const feedback = document.querySelector<HTMLElement>(`#${feedbackId}`)
+    const message = getPatternFieldFeedback(input.value)
+    if (feedback) {
+      if (message) {
+        feedback.hidden = false
+        feedback.textContent = message
+        input.classList.add('input-invalid')
+      } else {
+        feedback.hidden = true
+        feedback.textContent = ''
+        input.classList.remove('input-invalid')
+      }
+    }
+    formSnapshot = captureFormSnapshot()
+    updateDifficultyPanel()
+  }
+
+  input.addEventListener('beforeinput', (event) => {
+    const e = event as InputEvent
+    if (e.isComposing) return
+    if (e.inputType === 'insertText' && typeof e.data === 'string') {
+      const next =
+        input.value.slice(0, input.selectionStart ?? input.value.length) +
+        e.data +
+        input.value.slice(input.selectionEnd ?? input.value.length)
+      if (next.length > UX_MAX_VANITY_CHARS) {
+        e.preventDefault()
+        const feedback = document.querySelector<HTMLElement>(`#${feedbackId}`)
+        if (feedback) {
+          feedback.hidden = false
+          feedback.textContent = 'Maximum 5 characters.'
+        }
+        input.classList.add('input-invalid')
+      }
+    }
+  })
+
+  input.addEventListener('paste', (event) => {
+    event.preventDefault()
+    const text = event.clipboardData?.getData('text') ?? ''
+    const start = input.selectionStart ?? 0
+    const end = input.selectionEnd ?? 0
+    const next = input.value.slice(0, start) + text + input.value.slice(end)
+    if (next.length > UX_MAX_VANITY_CHARS) {
+      const feedback = document.querySelector<HTMLElement>(`#${feedbackId}`)
+      if (feedback) {
+        feedback.hidden = false
+        feedback.textContent = 'Maximum 5 characters.'
+      }
+      input.classList.add('input-invalid')
+      return
+    }
+    input.setRangeText(text, start, end, 'end')
+    syncFeedback()
+  })
+
+  input.addEventListener('input', syncFeedback)
+  syncFeedback()
+}
+
+function ensureSearchingShell(view: ActiveSearchView): void {
+  const host = document.querySelector('#generatorBody')
+  if (!host) return
+
+  if (searchingShellReady && uiMode === 'searching') {
+    const target = document.querySelector('#searchTarget')
+    if (target) {
+      target.textContent = `${describeSearchTarget(view.pattern, view.endPattern, view.position)}...`
+    }
+    return
+  }
+
+  host.innerHTML = `
+    <div class="search-live" aria-live="polite">
+      <p class="live-kicker search-pulse">Searching for address</p>
+      <p class="live-target"><strong id="searchTarget">${escapeHtml(describeSearchTarget(view.pattern, view.endPattern, view.position))}...</strong></p>
+
+      <div class="stat-grid stat-grid--live">
         <div class="stat-box">
-          <div class="stat-title">Engine</div>
-          <div class="stat-value">${isKit ? 'Kit' : 'web3.js'}</div>
+          <div class="stat-title">Speed</div>
+          <div class="stat-value" id="metricSpeed">0/sec</div>
         </div>
-
         <div class="stat-box">
-          <div class="stat-title">Workers</div>
-          <div class="stat-value">${workerCount}</div>
+          <div class="stat-title">Attempts</div>
+          <div class="stat-value" id="metricAttempts">0</div>
         </div>
+        <div class="stat-box">
+          <div class="stat-title">Elapsed</div>
+          <div class="stat-value" id="metricElapsed">00:00</div>
+        </div>
+      </div>
 
+      <p class="field-hint" id="searchPerfHint">Performance: ${escapeHtml(view.performance.toUpperCase())}</p>
+
+      <button type="button" class="stop-btn" id="stopBtn">Stop search</button>
+    </div>
+  `
+
+  document.querySelector('#stopBtn')?.addEventListener('click', () => {
+    searchController.stop()
+  })
+
+  searchingShellReady = true
+}
+
+function updateSearchingMetrics(progress: SearchProgress): void {
+  if (uiMode !== 'searching' || !activeSearchView) return
+  if (progress.searchId !== activeSearchView.searchId) return
+
+  ensureSearchingShell(activeSearchView)
+
+  const attempts = document.querySelector('#metricAttempts')
+  const speed = document.querySelector('#metricSpeed')
+  const elapsed = document.querySelector('#metricElapsed')
+
+  if (attempts) attempts.textContent = formatNumber(progress.attempts)
+  if (speed) speed.textContent = `${formatNumber(progress.speed)}/sec`
+  if (elapsed) elapsed.textContent = formatElapsed(progress.elapsedMs)
+}
+
+function renderStopped(): void {
+  const host = document.querySelector('#generatorBody')
+  if (!host) return
+
+  host.innerHTML = `
+    <div class="stopped-panel">
+      <p class="live-kicker">Search stopped</p>
+      <p class="error-text">No address was generated.</p>
+      <div class="action-row">
+        <button type="button" class="secondary-btn" id="tryAgainBtn">Try again</button>
+      </div>
+    </div>
+  `
+
+  document.querySelector('#tryAgainBtn')?.addEventListener('click', () => {
+    setMode('idle')
+    renderIdleForm()
+  })
+}
+
+function renderFound(): void {
+  const host = document.querySelector('#generatorBody')
+  if (!host || !sessionWallet) return
+
+  const wallet = sessionWallet
+  const masked = '•'.repeat(64)
+  const lifecycle = lifecycleFromBackupStatus(wallet.backupStatus)
+
+  host.innerHTML = `
+    <div class="found-panel" data-lifecycle="${lifecycle}">
+      <p class="live-kicker success">Address found</p>
+
+      <div class="wallet-box">
+        <div class="wallet-key" id="foundPublicKey">${escapeHtml(wallet.publicKey)}</div>
+        <div class="action-row">
+          <button type="button" class="secondary-btn" id="copyPublicBtn">Copy address</button>
+        </div>
+      </div>
+
+      <div class="wallet-box wallet-box--secure" id="backupUrgent">
+        <div class="wallet-title">Secure your key</div>
+        <p class="found-lead">
+          This is the only key that controls this address.
+          Save your backup before leaving this page.
+        </p>
+        <p class="keep-private-note">
+          <strong>Keep this backup private.</strong>
+          Anyone with this private key can control this wallet and its funds.
+          Never send it through chat, email, or social media.
+        </p>
         ${
-          isKit
-            ? `
-              <div class="stat-box">
-                <div class="stat-title">Elapsed</div>
-                <div class="stat-value">${elapsed}s</div>
-              </div>
-            `
-            : `
-              <div class="stat-box">
-                <div class="stat-title">Attempts</div>
-                <div class="stat-value">${attempts}</div>
-              </div>
-
-              <div class="stat-box">
-                <div class="stat-title">Speed</div>
-                <div class="stat-value">${speed}</div>
-              </div>
-            `
+          import.meta.env.DEV
+            ? `<p class="dev-hmr-warning">Development mode: editing JavaScript source can reload this page and destroy the in-memory key. Finish backup before changing code.</p>`
+            : ''
         }
+        <div class="action-row">
+          <button type="button" class="backup-btn" id="downloadKeyBackupBtn">Download key backup</button>
+        </div>
+        <p class="offline-hint">
+          Recommended: store the backup offline in a secure location, for example on an encrypted USB drive.
+        </p>
+        <div id="backupConfirmArea" class="backup-confirm-area"></div>
       </div>
 
-      ${
-        isKit
-          ? 'Searching for vanity address with Solana Kit...'
-          : 'wallets/sec'
-      }
-    </div>
-  `)
-
-  updateEstimate()
-}
-
-function getWorkerCount() {
-  const selectedWorkerCount = workerCountSelect.value
-  const deviceThreads = navigator.hardwareConcurrency || 4
-
-  if (selectedWorkerCount === 'auto') {
-    return Math.max(1, Math.floor(deviceThreads / 2))
-  }
-
-  if (selectedWorkerCount === 'max') {
-    return deviceThreads
-  }
-
-  return Number(selectedWorkerCount)
-}
-
-function downloadWalletBackup(publicKey: string, privateKey: string) {
-  const content =
-    'CBS Local Wallet Generator\n\n' +
-    '==============================\n\n' +
-    'Public Key:\n' +
-    publicKey +
-    '\n\n==============================\n\n' +
-    'Private Key:\n' +
-    privateKey +
-    '\n\n==============================\n\n' +
-    'IMPORT INSTRUCTIONS:\n' +
-    '1. Open Phantom, Solflare, Backpack or another Solana wallet.\n' +
-    '2. Choose Add / Import Wallet.\n' +
-    '3. Choose Private Key.\n' +
-    '4. Paste the private key.\n' +
-    '5. Save the wallet.\n\n' +
-    'WARNING:\n' +
-    'Never share your private key.\n' +
-    'Anyone with this key has full access to your wallet.\n'
-
-  const blob = new Blob([content], {
-    type: 'text/plain',
-  })
-
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-
-  a.href = url
-  a.download = 'wallet-' + publicKey + '.txt'
-  a.click()
-
-  URL.revokeObjectURL(url)
-}
-
-function downloadJsonKeypair(secretKey: Uint8Array, publicKey: string) {
-  const jsonArray = Array.from(secretKey)
-
-  const blob = new Blob([JSON.stringify(jsonArray)], {
-    type: 'application/json',
-  })
-
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-
-  a.href = url
-  a.download = 'wallet-' + publicKey + '.json'
-  a.click()
-
-  URL.revokeObjectURL(url)
-}
-
-positionSelect.addEventListener('change', () => {
-  renderPatternFields()
-})
-
-ignoreCaseInput.addEventListener('change', updateEstimate)
-workerCountSelect.addEventListener('change', updateEstimate)
-engineSelect.addEventListener('change', updateEstimate)
-
-clearRecentBtn?.addEventListener('click', () => {
-  localStorage.removeItem(recentWalletsKey)
-  renderRecentWallets()
-})
-
-stopBtn?.addEventListener('click', () => {
-  stopWorkers()
-
-  setStatusHtml(`
-    <div class="status-searching">
-      Search stopped.
-    </div>
-  `)
-})
-
-startBtn?.addEventListener('click', () => {
-  const pattern = getPatternValue()
-  const endPattern = getEndPatternValue()
-  const position = positionSelect.value
-  const workerCount = getWorkerCount()
-  const ignoreCase = ignoreCaseInput.checked
-
-  if (!pattern) {
-    setStatusHtml(`
-      <div class="status-searching">
-        Please enter a pattern.
+      <div class="wallet-box wallet-box--transfer" id="transferSection">
+        <div class="wallet-title">Import on another device</div>
+        <p class="found-lead">
+          Optionally show a private-key QR to import into a wallet on another device.
+        </p>
+        <div class="action-row" id="qrActions">
+          <button type="button" class="secondary-btn" id="showQrBtn">Show private-key QR</button>
+        </div>
+        <p class="field-hint">Scan only with a wallet or device you trust.</p>
+        <div id="qrPanel" class="qr-panel" hidden></div>
       </div>
-    `)
-    return
-  }
 
-  if (position === 'bothEnds' && !endPattern) {
-    setStatusHtml(`
-      <div class="status-searching">
-        Please enter an end pattern for Start AND end mode.
-      </div>
-    `)
-    return
-  }
-
-  if (hasBlockedCharacters(pattern) || hasBlockedCharacters(endPattern)) {
-    const invalidCharacters = [
-      ...getBlockedCharacters(pattern),
-      ...getBlockedCharacters(endPattern),
-    ].join(', ')
-
-    setStatusHtml(`
-      <div class="status-searching">
-        <strong>Invalid pattern</strong><br><br>
-        These characters are not allowed in Solana Base58 addresses:<br><br>
-        <strong>${invalidCharacters}</strong><br><br>
-        Please remove them and try again.
-      </div>
-    `)
-    return
-  }
-
-  stopWorkers()
-
-  isSearching = true
-  attempts = 0
-  startTime = Date.now()
-  openStatusModal()
-
-  if (engineSelect.value === 'kit') {
-    const interval = setInterval(() => {
-      if (!isSearching) {
-        clearInterval(interval)
-        return
-      }
-
-      updateStatus(workerCount)
-    }, 100)
-  }
-
-  updateStatus(workerCount)
-
-  for (let i = 0; i < workerCount; i++) {
-    let worker: Worker
-
-    if (engineSelect.value === 'kit') {
-      worker = new Worker(
-        new URL('./kitWorker.ts', import.meta.url),
-        { type: 'module' }
-      )
-    } else {
-      worker = new Worker(
-        new URL('./walletWorker.ts', import.meta.url),
-        { type: 'module' }
-      )
-    }
-
-    worker.onmessage = (event) => {
-      if (!isSearching) return
-
-      if (event.data.type === 'attempt') {
-        attempts++
-
-        if (attempts % 1000 === 0) {
-          updateStatus(workerCount)
-        }
-      }
-
-      if (event.data.type === 'started') {
-        return
-      }
-
-      if (event.data.type === 'found') {
-        const publicKey = event.data.publicKey
-        const privateKey = event.data.privateKey
-        const secretKey = new Uint8Array(event.data.secretKey)
-        const engine = event.data.engine || engineSelect.value
-        const kitSeconds = event.data.seconds || 0
-
-        stopWorkers()
-
-        const speed = getSpeed()
-
-        const savedPattern =
-          position === 'bothEnds'
-            ? pattern + '...' + endPattern
-            : pattern
-
-        const isKitEngine = isKitEngineValue(engine)
-
-        saveRecentWallet({
-          publicKey,
-          pattern: savedPattern,
-          position,
-          engine: isKitEngine ? 'Kit' : 'web3.js',
-          attempts: isKitEngine ? undefined : attempts,
-          speed: isKitEngine ? undefined : speed,
-          elapsed: isKitEngine ? kitSeconds : undefined,
-          createdAt: new Date().toLocaleString(),
-        })
-
-        setStatusHtml(`
-          <div class="status-found">
-            <strong>MATCH FOUND</strong>
-
-            <br><br>
-
-            <div class="stat-grid">
-              <div class="stat-box">
-                <div class="stat-title">Engine</div>
-                <div class="stat-value">${isKitEngine ? 'Kit' : 'web3.js'}</div>
-              </div>
-
-              <div class="stat-box">
-                <div class="stat-title">Workers</div>
-                <div class="stat-value">${workerCount}</div>
-              </div>
-
-              ${
-                isKitEngine
-                  ? `
-                    <div class="stat-box">
-                      <div class="stat-title">Elapsed</div>
-                      <div class="stat-value">${kitSeconds.toFixed(2)}s</div>
-                    </div>
-                  `
-                  : `
-                    <div class="stat-box">
-                      <div class="stat-title">Attempts</div>
-                      <div class="stat-value">${attempts}</div>
-                    </div>
-
-                    <div class="stat-box">
-                      <div class="stat-title">Speed</div>
-                      <div class="stat-value">${speed}</div>
-                    </div>
-                  `
-              }
-            </div>
-
-            <div class="wallet-box">
-              <div class="wallet-title">Public Key</div>
-              <div class="wallet-key">${publicKey}</div>
-              <button id="copyPublicBtn">Copy Public Key</button>
-            </div>
-
-            <div class="wallet-box">
-              <div class="wallet-title">Private Key</div>
-              <div class="wallet-key">${privateKey}</div>
-              <button id="copyPrivateBtn">Copy Private Key</button>
-            </div>
-
-            <button id="downloadBtn">Download Wallet Backup (.txt)</button>
-            <button id="downloadJsonBtn">Download JSON Keypair</button>
-
-            <div class="import-box">
-              <strong>Import into a Solana wallet</strong><br><br>
-              1. Open Phantom, Solflare, Backpack or another Solana wallet.<br>
-              2. Choose Add / Import Wallet.<br>
-              3. Choose Private Key.<br>
-              4. Paste the private key.<br>
-              5. Save the wallet.
-            </div>
-
-            <p class="danger">
-              Keep this file offline. Never share your private key.
-            </p>
+      <details class="found-advanced" id="privateKeySection">
+        <summary>Advanced</summary>
+        <div class="found-advanced-body">
+          <p class="private-key-warning" id="privateWarning">
+            Reveal only if you need to copy the private key manually.
+            Anyone who sees it can control this wallet.
+          </p>
+          <div
+            class="wallet-key wallet-key--private"
+            id="privateKeyDisplay"
+            data-hidden="true"
+            aria-label="Private key hidden"
+            hidden
+          >${masked}</div>
+          <div class="action-row" id="privateActions">
+            <button type="button" class="secondary-btn" id="revealPrivateBtn">Reveal private key</button>
           </div>
-        `)
+          <p class="copy-feedback" id="privateFeedback" hidden aria-live="polite"></p>
+        </div>
+      </details>
 
-        attachWalletActionHandlers(publicKey, privateKey, secretKey)
+      <div class="action-row">
+        <button type="button" class="secondary-btn danger-outline-btn" id="anotherBtn">Generate another address</button>
+      </div>
+    </div>
+  `
+
+  updateBackupBanner()
+
+  document.querySelector('#generatorCard')?.scrollIntoView({
+    block: 'start',
+    behavior: 'smooth',
+  })
+
+  bindFoundActions()
+}
+
+function bindFoundActions(): void {
+  if (!sessionWallet) return
+  const wallet = sessionWallet
+
+  document.querySelector('#copyPublicBtn')?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(wallet.publicKey)
+    } catch {
+      // Ignore.
+    }
+  })
+
+  document.querySelector('#downloadKeyBackupBtn')?.addEventListener('click', () => {
+    if (!sessionWallet) return
+    downloadTextFile(
+      buildKeyBackupFilename(sessionWallet.publicKey),
+      buildWalletBackupText(sessionWallet.publicKey, sessionWallet.privateKey)
+    )
+    noteBackupDownloaded()
+  })
+
+  document.querySelector('#revealPrivateBtn')?.addEventListener('click', () => {
+    void requestRevealPrivateKey()
+  })
+
+  document.querySelector('#showQrBtn')?.addEventListener('click', () => {
+    void requestShowPrivateKeyQr()
+  })
+
+  document.querySelector('#anotherBtn')?.addEventListener('click', () => {
+    void requestGenerateAnother()
+  })
+}
+
+function noteBackupDownloaded(): void {
+  if (!sessionWallet) return
+  sessionWallet.backupStatus = markDownloaded(sessionWallet.backupStatus)
+  syncBeforeUnloadProtection()
+  updateBackupBanner()
+}
+
+function confirmBackupStatus(): void {
+  if (!sessionWallet) return
+  sessionWallet.backupStatus = markConfirmed()
+  syncBeforeUnloadProtection()
+  syncFoundLifecycleAttribute()
+  updateBackupBanner()
+}
+
+function syncFoundLifecycleAttribute(): void {
+  if (!sessionWallet) return
+  const panel = document.querySelector('.found-panel')
+  if (!panel) return
+  panel.setAttribute(
+    'data-lifecycle',
+    lifecycleFromBackupStatus(sessionWallet.backupStatus)
+  )
+}
+
+function updateBackupBanner(): void {
+  if (!sessionWallet) return
+  const area = document.querySelector('#backupConfirmArea')
+  if (!area) return
+
+  area.innerHTML = ''
+  syncFoundLifecycleAttribute()
+
+  if (sessionWallet.backupStatus === 'confirmed') {
+    const p = document.createElement('p')
+    p.className = 'backup-status backup-status--ok'
+    p.id = 'backupStatus'
+    p.textContent =
+      'Backup confirmed. You can safely continue. The private key stays only in this tab until you leave.'
+    area.appendChild(p)
+    return
+  }
+
+  if (sessionWallet.backupStatus === 'downloaded') {
+    const status = document.createElement('p')
+    status.className = 'backup-status backup-status--ok'
+    status.id = 'backupStatus'
+    status.textContent = 'Backup downloaded'
+    const hint = document.createElement('p')
+    hint.className = 'offline-hint'
+    hint.textContent =
+      'Before confirming, store the file somewhere safe and preferably offline.'
+    const label = document.createElement('label')
+    label.className = 'backup-confirm-label'
+    label.htmlFor = 'confirmBackupCheck'
+    const checkbox = document.createElement('input')
+    checkbox.type = 'checkbox'
+    checkbox.id = 'confirmBackupCheck'
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) confirmBackupStatus()
+    })
+    const span = document.createElement('span')
+    span.textContent = 'I have safely stored my backup'
+    label.append(checkbox, span)
+    area.append(status, hint, label)
+  }
+}
+
+async function requestRevealPrivateKey(): Promise<void> {
+  if (!sessionWallet) return
+
+  const confirmed = await showConfirmDialog({
+    title: 'Reveal private key?',
+    paragraphs: [
+      'Your private key gives full control of this address.',
+      'Anyone who sees, copies, photographs or scans it can control the wallet and its funds.',
+      'Only reveal it when nobody else can see your screen.',
+    ],
+    confirmLabel: 'I understand — reveal',
+    cancelLabel: 'Cancel',
+    dangerConfirm: true,
+  })
+
+  if (!confirmed || !sessionWallet) return
+  revealPrivateKey()
+}
+
+async function requestShowPrivateKeyQr(): Promise<void> {
+  if (!sessionWallet) return
+
+  const confirmed = await showConfirmDialog({
+    title: 'Show private-key QR?',
+    paragraphs: [
+      'This QR code contains your private key.',
+      'Anyone who scans or photographs this QR code can control this wallet.',
+      'Only show it when nobody else can see your screen, and only scan it with a wallet or device you trust.',
+    ],
+    confirmLabel: 'I understand — show QR',
+    cancelLabel: 'Cancel',
+    dangerConfirm: true,
+  })
+
+  if (!confirmed || !sessionWallet) return
+  showPrivateKeyQr()
+}
+
+async function requestGenerateAnother(): Promise<void> {
+  if (!sessionWallet) {
+    setMode('idle')
+    renderIdleForm()
+    return
+  }
+
+  if (requiresDiscardWarning(sessionWallet.backupStatus)) {
+    const confirmed = await showConfirmDialog({
+      title: 'Your current private key has not been confirmed as backed up',
+      paragraphs: [
+        'If you continue, this private key will be removed from this page and may not be recoverable.',
+        'Go back and download a backup first unless you are certain you no longer need this keypair.',
+      ],
+      confirmLabel: 'I understand — discard this key',
+      cancelLabel: 'Go back and back it up',
+      dangerConfirm: true,
+    })
+    if (!confirmed) return
+  } else {
+    const confirmed = await showConfirmDialog({
+      title: 'Generate another address?',
+      paragraphs: [
+        'This will clear the current result from this tab.',
+        'Continue only if you already stored your backup offline.',
+      ],
+      confirmLabel: 'Continue',
+      cancelLabel: 'Cancel',
+      dangerConfirm: true,
+    })
+    if (!confirmed) return
+  }
+
+  hidePrivateKeyQr()
+  clearSessionWallet()
+  activeSearchView = null
+  setMode('idle')
+  renderIdleForm()
+}
+
+/**
+ * Guard any transition that would wipe an unsecured found keypair.
+ * Returns false if the user cancelled.
+ */
+async function confirmDiscardUnsecuredResult(): Promise<boolean> {
+  if (!sessionWallet || !requiresDiscardWarning(sessionWallet.backupStatus)) {
+    return true
+  }
+
+  return showConfirmDialog({
+    title: 'Your current private key has not been confirmed as backed up',
+    paragraphs: [
+      'Starting a new search will remove this private key from this page and it may not be recoverable.',
+      'Go back and download a backup first unless you are certain you no longer need this keypair.',
+    ],
+    confirmLabel: 'I understand — discard this key',
+    cancelLabel: 'Go back and back it up',
+    dangerConfirm: true,
+  })
+}
+
+function revealPrivateKey(): void {
+  if (!sessionWallet) return
+
+  sessionWallet.revealed = true
+  const display = document.querySelector<HTMLElement>('#privateKeyDisplay')
+  const warning = document.querySelector('#privateWarning')
+  const advanced = document.querySelector<HTMLDetailsElement>('#privateKeySection')
+  if (advanced) advanced.open = true
+
+  if (warning) {
+    warning.textContent =
+      'Never share your private key. Anyone with this key can control this wallet.'
+  }
+
+  if (display) {
+    display.hidden = false
+    display.textContent = sessionWallet.privateKey
+    display.setAttribute('data-hidden', 'false')
+    display.removeAttribute('aria-label')
+  }
+
+  renderPrivateActionButtons()
+}
+
+function hidePrivateKey(): void {
+  if (!sessionWallet) return
+  sessionWallet.revealed = false
+
+  const display = document.querySelector<HTMLElement>('#privateKeyDisplay')
+  const warning = document.querySelector('#privateWarning')
+
+  if (warning) {
+    warning.textContent =
+      'Reveal only if you need to copy the private key manually. Anyone who sees it can control this wallet.'
+  }
+
+  if (display) {
+    display.hidden = true
+    display.textContent = '•'.repeat(64)
+    display.setAttribute('data-hidden', 'true')
+    display.setAttribute('aria-label', 'Private key hidden')
+  }
+
+  renderPrivateActionButtons()
+}
+
+function showPrivateKeyQr(): void {
+  if (!sessionWallet) return
+
+  const panel = document.querySelector<HTMLElement>('#qrPanel')
+  if (!panel) return
+
+  let svg: string
+  try {
+    svg = renderPrivateKeyQrSvg(sessionWallet.privateKey)
+  } catch {
+    const feedback = document.querySelector<HTMLElement>('#privateFeedback')
+    if (feedback) {
+      feedback.hidden = false
+      feedback.textContent = 'Could not create the QR code in this browser.'
+    }
+    return
+  }
+
+  sessionWallet.qrVisible = true
+  panel.hidden = false
+  panel.innerHTML = `
+    <div class="wallet-title">Private key QR</div>
+    <div class="qr-frame" id="qrFrame" aria-label="Private key QR code">${svg}</div>
+    <p class="private-key-warning">
+      This QR code contains your private key.
+      Scan it only with a wallet or device you trust.
+    </p>
+    <div class="action-row">
+      <button type="button" class="tertiary-btn" id="hideQrBtn">Hide QR</button>
+    </div>
+  `
+
+  document.querySelector('#hideQrBtn')?.addEventListener('click', () => {
+    hidePrivateKeyQr()
+  })
+
+  renderQrActionButtons()
+}
+
+function hidePrivateKeyQr(): void {
+  if (sessionWallet) {
+    sessionWallet.qrVisible = false
+  }
+
+  const panel = document.querySelector<HTMLElement>('#qrPanel')
+  if (panel) {
+    panel.hidden = true
+    panel.innerHTML = ''
+  }
+
+  renderQrActionButtons()
+}
+
+function renderQrActionButtons(): void {
+  if (!sessionWallet) return
+  const actions = document.querySelector('#qrActions')
+  if (!actions) return
+
+  if (sessionWallet.qrVisible) {
+    actions.innerHTML = ''
+    return
+  }
+
+  actions.innerHTML =
+    '<button type="button" class="secondary-btn" id="showQrBtn">Show private-key QR</button>'
+  document.querySelector('#showQrBtn')?.addEventListener('click', () => {
+    void requestShowPrivateKeyQr()
+  })
+}
+
+function renderPrivateActionButtons(): void {
+  if (!sessionWallet) return
+
+  const actions = document.querySelector('#privateActions')
+  if (!actions) return
+
+  if (sessionWallet.revealed) {
+    actions.innerHTML = `
+      <button type="button" class="secondary-btn" id="copyPrivateBtn">Copy private key</button>
+      <button type="button" class="tertiary-btn" id="hidePrivateBtn">Hide private key</button>
+    `
+  } else {
+    actions.innerHTML = `
+      <button type="button" class="secondary-btn" id="revealPrivateBtn">Reveal private key</button>
+    `
+  }
+
+  document.querySelector('#revealPrivateBtn')?.addEventListener('click', () => {
+    void requestRevealPrivateKey()
+  })
+  document.querySelector('#hidePrivateBtn')?.addEventListener('click', () => {
+    hidePrivateKey()
+  })
+  document.querySelector('#copyPrivateBtn')?.addEventListener('click', async () => {
+    if (!sessionWallet?.revealed) return
+    const feedback = document.querySelector<HTMLElement>('#privateFeedback')
+    try {
+      await navigator.clipboard.writeText(sessionWallet.privateKey)
+      if (feedback) {
+        feedback.hidden = false
+        feedback.textContent = 'Private key copied.'
+        window.setTimeout(() => {
+          feedback.hidden = true
+        }, 2400)
+      }
+    } catch {
+      if (feedback) {
+        feedback.hidden = false
+        feedback.textContent =
+          'Copy failed. Select the private key and copy manually.'
       }
     }
+  })
+}
 
-    worker.postMessage({
+function renderError(message: string): void {
+  const host = document.querySelector('#generatorBody')
+  if (!host) return
+
+  host.innerHTML = `
+    <div class="error-panel">
+      <p class="live-kicker danger">Unable to generate</p>
+      <p class="error-text">${escapeHtml(message)}</p>
+      <button type="button" class="secondary-btn" id="backBtn">Back</button>
+    </div>
+  `
+
+  document.querySelector('#backBtn')?.addEventListener('click', () => {
+    setMode('idle')
+    renderIdleForm()
+  })
+}
+
+function updateThreadHint(): void {
+  const hint = document.querySelector('#threadHint')
+  if (!hint) return
+
+  const plan = resolveWorkerPlan({
+    preset: formSnapshot.performance,
+    hardwareConcurrency: navigator.hardwareConcurrency || 4,
+    isMobile: detectMobile(),
+  })
+
+  hint.textContent =
+    `Detected: ${plan.hardwareConcurrency} CPU threads` +
+    `${plan.isMobile ? ' · mobile device' : ''}` +
+    ` · ${plan.preset.toUpperCase()} uses ${plan.workers} workers`
+}
+
+function renderIdleForm(): void {
+  const host = document.querySelector('#generatorBody')
+  if (!host) return
+
+  const isMobile = detectMobile()
+  const snap = formSnapshot
+
+  host.innerHTML = `
+    <p class="mode-label">Your address should:</p>
+    <div class="mode-tabs" role="radiogroup" aria-label="Where the text should appear">
+      <label class="mode-tab">
+        <input type="radio" name="positionPrimary" value="prefix" ${snap.positionPrimary === 'prefix' ? 'checked' : ''} />
+        <span>Start with</span>
+      </label>
+      <label class="mode-tab">
+        <input type="radio" name="positionPrimary" value="suffix" ${snap.positionPrimary === 'suffix' ? 'checked' : ''} />
+        <span>End with</span>
+      </label>
+      <label class="mode-tab">
+        <input type="radio" name="positionPrimary" value="anywhere" ${snap.positionPrimary === 'anywhere' ? 'checked' : ''} />
+        <span>Contain</span>
+      </label>
+    </div>
+
+    <div id="patternFields"></div>
+
+    <div class="toggle-row">
+      <input id="caseSensitive" type="checkbox" ${snap.caseSensitive ? 'checked' : ''} />
+      <label for="caseSensitive">Case sensitive</label>
+    </div>
+
+    <div id="difficultyPanel" class="difficulty-panel"></div>
+
+    ${
+      isMobile
+        ? `<p class="mobile-note">Longer vanity searches are faster on desktop and may use significant battery on mobile.</p>`
+        : ''
+    }
+
+    <details class="advanced-block" ${snap.advancedOpen ? 'open' : ''}>
+      <summary>Advanced settings</summary>
+      <div class="advanced-body">
+        <p class="field-hint">Optional modes and performance for power users.</p>
+
+        <p class="field-hint"><strong>Advanced search</strong></p>
+        <label class="advanced-option">
+          <input type="radio" name="positionAdvanced" value="" ${snap.positionAdvanced === '' ? 'checked' : ''} />
+          Use primary mode above
+        </label>
+        <label class="advanced-option">
+          <input type="radio" name="positionAdvanced" value="both" ${snap.positionAdvanced === 'both' ? 'checked' : ''} />
+          Start OR end
+        </label>
+        <label class="advanced-option">
+          <input type="radio" name="positionAdvanced" value="bothEnds" ${snap.positionAdvanced === 'bothEnds' ? 'checked' : ''} />
+          Start AND end
+        </label>
+        <p class="field-hint warning-text">
+          Start AND end is exponentially harder. Prefer short patterns.
+        </p>
+
+        <label for="performance">Performance</label>
+        <div class="performance-radios" role="radiogroup" aria-label="Performance">
+          <label class="advanced-option">
+            <input type="radio" name="performanceChoice" value="low" ${snap.performance === 'low' ? 'checked' : ''} />
+            Low
+          </label>
+          <label class="advanced-option">
+            <input type="radio" name="performanceChoice" value="auto" ${snap.performance === 'auto' || snap.performance === 'balanced' ? 'checked' : ''} />
+            Auto
+          </label>
+          <label class="advanced-option">
+            <input type="radio" name="performanceChoice" value="maximum" ${snap.performance === 'maximum' ? 'checked' : ''} />
+            Maximum
+          </label>
+        </div>
+        <select id="performance" class="visually-hidden" aria-hidden="true" tabindex="-1">
+          <option value="auto" ${snap.performance === 'auto' || snap.performance === 'balanced' ? 'selected' : ''}>AUTO</option>
+          <option value="low" ${snap.performance === 'low' ? 'selected' : ''}>Low</option>
+          <option value="maximum" ${snap.performance === 'maximum' ? 'selected' : ''}>Maximum</option>
+        </select>
+        <p class="field-hint" id="threadHint"></p>
+      </div>
+    </details>
+
+    <div class="action-row">
+      <button type="button" class="primary-btn" id="startBtn" ${ed25519Ready ? '' : 'disabled'}>
+        Generate address
+      </button>
+    </div>
+    <p class="support-status" id="cryptoStatus"></p>
+  `
+
+  bindIdleFormEvents()
+  renderPatternFields()
+  updateThreadHint()
+  updateCryptoStatus()
+}
+
+function updateCryptoStatus(): void {
+  const status = document.querySelector('#cryptoStatus')
+  const startBtn = document.querySelector<HTMLButtonElement>('#startBtn')
+  if (!status) return
+
+  if (!ed25519Ready) {
+    status.textContent = 'Checking browser cryptography support…'
+    startBtn && (startBtn.disabled = true)
+    return
+  }
+
+  status.textContent = needsPolyfill
+    ? 'Ed25519 compatibility mode enabled for this browser.'
+    : 'Generated locally. Private keys are never stored on this site.'
+  startBtn && (startBtn.disabled = false)
+}
+
+function syncPerformanceFromRadios(): void {
+  const choice =
+    document.querySelector<HTMLInputElement>(
+      'input[name="performanceChoice"]:checked'
+    )?.value || 'auto'
+  const select = document.querySelector<HTMLSelectElement>('#performance')
+  if (select) {
+    select.value = choice === 'balanced' ? 'auto' : choice
+  }
+  formSnapshot = captureFormSnapshot()
+  formSnapshot.performance =
+    choice === 'low' || choice === 'maximum' ? choice : 'auto'
+  updateThreadHint()
+  updateDifficultyPanel()
+}
+
+function bindIdleFormEvents(): void {
+  document
+    .querySelectorAll('input[name="positionPrimary"]')
+    .forEach((input) => {
+      input.addEventListener('change', () => {
+        const advancedNone = document.querySelector<HTMLInputElement>(
+          'input[name="positionAdvanced"][value=""]'
+        )
+        if (advancedNone) advancedNone.checked = true
+        formSnapshot = captureFormSnapshot()
+        renderPatternFields()
+      })
+    })
+
+  document
+    .querySelectorAll('input[name="positionAdvanced"]')
+    .forEach((input) => {
+      input.addEventListener('change', () => {
+        formSnapshot = captureFormSnapshot()
+        renderPatternFields()
+      })
+    })
+
+  document
+    .querySelector('#caseSensitive')
+    ?.addEventListener('change', () => {
+      formSnapshot = captureFormSnapshot()
+      updateDifficultyPanel()
+    })
+
+  document
+    .querySelectorAll('input[name="performanceChoice"]')
+    .forEach((input) => {
+      input.addEventListener('change', syncPerformanceFromRadios)
+    })
+
+  document.querySelector('details.advanced-block')?.addEventListener('toggle', () => {
+    formSnapshot = captureFormSnapshot()
+  })
+
+  document.querySelector('#startBtn')?.addEventListener('click', () => {
+    void startSearch()
+  })
+}
+
+async function startSearch(): Promise<void> {
+  if (!ed25519Ready) {
+    setMode('error')
+    renderError(
+      'Ed25519 is not available in this browser. Please update your browser and try again.'
+    )
+    return
+  }
+
+  formSnapshot = captureFormSnapshot()
+  const pattern = formSnapshot.pattern
+  const endPattern = formSnapshot.endPattern
+  const position = getPositionFromSnapshot(formSnapshot)
+  const caseSensitive = formSnapshot.caseSensitive
+  const validation = validateSearchPatterns(pattern, endPattern, position)
+
+  if (!validation.ok) {
+    setMode('error')
+    renderError(validation.message)
+    return
+  }
+
+  if (!(await confirmDiscardUnsecuredResult())) {
+    return
+  }
+
+  if (searchController.isSearching) {
+    searchController.stop({ silent: true })
+  }
+
+  clearSessionWallet()
+
+  const plan = resolveWorkerPlan({
+    preset: formSnapshot.performance,
+    hardwareConcurrency: navigator.hardwareConcurrency || 4,
+    isMobile: detectMobile(),
+  })
+
+  const searchId = searchController.start({
+    match: {
       pattern,
       endPattern,
       position,
-      ignoreCase,
-    })
+      caseSensitive,
+    },
+    plan,
+    needsPolyfill,
+    progressEvery: 1000,
+  })
 
-    workers.push(worker)
+  activeSearchView = {
+    searchId,
+    pattern,
+    endPattern,
+    position,
+    caseSensitive,
+    performance: formSnapshot.performance,
   }
-})
 
-renderRecentWallets()
-renderPatternFields()
-setupScrollReveal()
-setupDonationCopy()
+  setMode('searching')
+  searchingShellReady = false
+  ensureSearchingShell(activeSearchView)
+  updateSearchingMetrics({
+    searchId,
+    attempts: 0,
+    elapsedMs: 0,
+    speed: 0,
+    workers: plan.workers,
+  })
+}
 
-function setupDonationCopy() {
-  const copyBtn = document.getElementById('donationCopyBtn')
-  const confirm = document.getElementById('donationConfirm')
+function renderRecentWallets(): void {
+  const host = document.querySelector('#recentWallets')
+  if (!host) return
+
+  const wallets = loadRecentWallets()
+  if (wallets.length === 0) {
+    host.innerHTML = `<p class="muted">No recent public addresses yet.</p>`
+    return
+  }
+
+  host.innerHTML = wallets
+    .map(
+      (wallet: RecentWallet) => `
+      <article class="recent-card" data-public-key="${escapeHtml(wallet.publicKey)}">
+        <div class="wallet-title">${escapeHtml(wallet.pattern)} · ${escapeHtml(wallet.position)}</div>
+        <div class="wallet-key">${escapeHtml(wallet.publicKey)}</div>
+        <p class="recent-meta">${escapeHtml(wallet.createdAt)}</p>
+        <button type="button" class="secondary-btn copy-recent-public">Copy address</button>
+      </article>
+    `
+    )
+    .join('')
+
+  host.querySelectorAll<HTMLElement>('.recent-card').forEach((card) => {
+    const publicKey = card.dataset.publicKey
+    if (!publicKey) return
+    card
+      .querySelector('.copy-recent-public')
+      ?.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(publicKey)
+        } catch {
+          // Ignore.
+        }
+      })
+  })
+}
+
+function setupDonationCopy(): void {
+  const copyBtn = document.querySelector('#donationCopyBtn')
+  const confirm = document.querySelector('#donationConfirm')
   if (!copyBtn || !confirm) return
-
-  let confirmTimeout: number | undefined
 
   copyBtn.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(donationWallet)
-      confirm.hidden = false
+      confirm.removeAttribute('hidden')
       confirm.textContent = 'Address copied.'
     } catch {
-      confirm.hidden = false
+      confirm.removeAttribute('hidden')
       confirm.textContent =
-        'Copy failed. Select the wallet address above and copy manually.'
+        'Copy failed. Select the address above and copy manually.'
     }
 
-    if (confirmTimeout !== undefined) {
-      window.clearTimeout(confirmTimeout)
-    }
-
-    confirmTimeout = window.setTimeout(() => {
-      confirm.hidden = true
-      confirm.textContent = 'Address copied.'
+    window.setTimeout(() => {
+      confirm.setAttribute('hidden', '')
     }, 2400)
   })
 }
 
-function setupScrollReveal() {
-  const revealElements = document.querySelectorAll<HTMLElement>('.reveal')
+app.innerHTML = `
+  <main class="app-shell">
+    <header class="site-header">
+      <div class="hero-banner" aria-hidden="true">
+        <img
+          class="hero-banner-img"
+          src="/assets/banner.png"
+          width="2103"
+          height="748"
+          alt=""
+          decoding="async"
+          fetchpriority="high"
+        />
+      </div>
+      <div class="brand-block">
+        <h1 class="brand-name">Solana Address Generator</h1>
+        <p class="brand-tagline">
+          Create a custom address for Solana — locally on your device.
+        </p>
+        <ul class="trust-line">
+          <li><span class="trust-dot trust-dot--accent" aria-hidden="true"></span>Local generation</li>
+          <li><span class="trust-dot" aria-hidden="true"></span>No wallet connection</li>
+          <li><span class="trust-dot" aria-hidden="true"></span>Keys stay on this device</li>
+        </ul>
+      </div>
+    </header>
 
-  if ('IntersectionObserver' in window) {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible')
-            observer.unobserve(entry.target)
+    <section class="page-section card card--generator" id="generatorCard" data-mode="idle" aria-labelledby="generator-heading">
+      <div class="card-header">
+        <h2 id="generator-heading" class="visually-hidden">Generate address</h2>
+      </div>
+      <div id="generatorBody"></div>
+    </section>
+
+    <section class="page-section card card--secondary" aria-labelledby="recent-heading">
+      <div class="card-header">
+        <h2 id="recent-heading">Recent public addresses</h2>
+        <p class="card-lede">Only public addresses are saved here. Private keys are never stored.</p>
+      </div>
+      <div id="recentWallets"></div>
+      <button type="button" class="tertiary-btn" id="clearRecentBtn">Clear recent addresses</button>
+    </section>
+
+    <section class="support-section" aria-labelledby="support-title">
+      <div class="support-card">
+        <p class="support-title" id="support-title">Support development</p>
+        <p class="support-text">Optional donations help keep this tool free.</p>
+        <code class="support-wallet">${donationWallet}</code>
+        <button type="button" class="secondary-btn" id="donationCopyBtn">Copy address</button>
+        <p class="support-confirm" id="donationConfirm" hidden aria-live="polite">Address copied.</p>
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <p class="site-footer-copy">
+        Independent open-source tool for Solana · Built by
+        <a href="https://tools.cbs-coin.com" target="_blank" rel="noopener noreferrer">CBS Tools</a>
+        · Not affiliated with the Solana Foundation
+      </p>
+    </footer>
+  </main>
+`
+
+renderIdleForm()
+renderRecentWallets()
+setupDonationCopy()
+
+document.querySelector('#clearRecentBtn')?.addEventListener('click', () => {
+  clearRecentWallets()
+  renderRecentWallets()
+})
+
+void (async () => {
+  const support = await ensureEd25519Support()
+  if (!support.ok) {
+    ed25519Ready = false
+    setMode('error')
+    renderError(support.reason)
+    return
+  }
+
+  ed25519Ready = true
+  needsPolyfill = support.polyfilled
+  if (uiMode === 'idle') {
+    updateCryptoStatus()
+  }
+
+  try {
+    const plan = resolveWorkerPlan({
+      preset: 'auto',
+      hardwareConcurrency: navigator.hardwareConcurrency || 4,
+      isMobile: detectMobile(),
+    })
+    const calibrated = await new Promise<number>((resolve) => {
+      let attempts = 0
+      const workers: Worker[] = []
+      const seconds = 1.25
+      window.setTimeout(() => {
+        for (const worker of workers) {
+          try {
+            worker.postMessage({ type: 'cancel', searchId: 0 })
+          } catch {
+            // ignore
+          }
+          worker.terminate()
+        }
+        resolve(Math.round(attempts / seconds))
+      }, seconds * 1000)
+
+      for (let i = 0; i < plan.workers; i++) {
+        const worker = new Worker(new URL('./kitWorker.ts', import.meta.url), {
+          type: 'module',
+        })
+        worker.onmessage = (event) => {
+          if (event.data?.type === 'progress') {
+            attempts += event.data.attempts || 0
           }
         }
-      },
-      {
-        threshold: 0.15,
+        worker.postMessage({
+          type: 'start',
+          searchId: 0,
+          pattern: 'ZZZZZ',
+          endPattern: '',
+          position: 'prefix',
+          caseSensitive: true,
+          batchConcurrency: plan.batchConcurrency,
+          progressEvery: 500,
+          needsPolyfill,
+        })
+        workers.push(worker)
       }
-    )
+    })
 
-    revealElements.forEach((element) => observer.observe(element))
-  } else {
-    revealElements.forEach((element) => element.classList.add('visible'))
+    if (calibrated > 0) {
+      lastMeasuredSpeed = calibrated
+      if (uiMode === 'idle') updateDifficultyPanel()
+    }
+  } catch {
+    // Calibration is best-effort only.
   }
+})()
+
+window.addEventListener('pagehide', () => {
+  // Do NOT wipe sessionWallet here — pagehide also fires on tab hide / bfcache
+  // and previously destroyed found keypairs before backup. Secrets are released
+  // when the document is destroyed or when clearSessionWallet runs intentionally.
+  searchController.stop({ silent: true })
+})
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    if (sessionWallet && requiresDiscardWarning(sessionWallet.backupStatus)) {
+      console.warn(
+        '[CBS] Dev HMR is about to reload. An unsecured found keypair in this tab will be lost. Back up before editing JS sources.'
+      )
+    }
+  })
 }

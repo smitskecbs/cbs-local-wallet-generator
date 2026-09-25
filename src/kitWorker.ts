@@ -1,104 +1,159 @@
-import { grindKeyPair } from '@solana/keys'
+import { generateKeyPair } from '@solana/keys'
 import { getAddressFromPublicKey } from '@solana/addresses'
-import bs58 from 'bs58'
+import { createAddressMatcher, type MatchConfig } from './vanity/matching'
+import {
+  exportSolanaSecretKey,
+  secretKeyToBase58,
+} from './vanity/export'
+import type {
+  WorkerInboundMessage,
+  WorkerOutboundMessage,
+} from './vanity/workerMessages'
 
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const DEFAULT_PROGRESS_EVERY = 1000
+
+let cancelRequested = false
+let activeSearchId = 0
+
+async function ensureWorkerEd25519(needsPolyfill: boolean): Promise<void> {
+  if (!needsPolyfill) {
+    try {
+      await crypto.subtle.generateKey({ name: 'Ed25519' }, false, [
+        'sign',
+        'verify',
+      ])
+      return
+    } catch {
+      // Fall through to polyfill.
+    }
+  }
+
+  const { install } = await import('@solana/webcrypto-ed25519-polyfill')
+  install()
 }
 
-function createMatchRegex(
-  pattern: string,
-  endPattern: string,
-  position: string,
-  ignoreCase: boolean
-) {
-  const flags = ignoreCase ? 'i' : ''
-  const start = escapeRegex(pattern)
-  const end = escapeRegex(endPattern)
+async function grind(config: {
+  searchId: number
+  matchConfig: MatchConfig
+  batchConcurrency: number
+  progressEvery: number
+}): Promise<void> {
+  const matcher = createAddressMatcher(config.matchConfig)
+  const batchConcurrency = Math.max(1, config.batchConcurrency)
+  const progressEvery = Math.max(100, config.progressEvery)
+  let attemptsSinceReport = 0
 
-  if (position === 'prefix') {
-    return new RegExp('^' + start, flags)
+  while (!cancelRequested && activeSearchId === config.searchId) {
+    const batch = await Promise.all(
+      Array.from({ length: batchConcurrency }, async () => {
+        const keyPair = await generateKeyPair(true)
+        const address = await getAddressFromPublicKey(keyPair.publicKey)
+        return { keyPair, address }
+      })
+    )
+
+    for (const candidate of batch) {
+      if (cancelRequested || activeSearchId !== config.searchId) {
+        self.postMessage({
+          type: 'cancelled',
+          searchId: config.searchId,
+        } satisfies WorkerOutboundMessage)
+        return
+      }
+
+      attemptsSinceReport++
+
+      if (matcher(candidate.address)) {
+        const secretKey = await exportSolanaSecretKey(candidate.keyPair)
+        const privateKey = await secretKeyToBase58(secretKey)
+
+        self.postMessage({
+          type: 'found',
+          searchId: config.searchId,
+          publicKey: candidate.address,
+          privateKey,
+          secretKey: Array.from(secretKey),
+        } satisfies WorkerOutboundMessage)
+
+        secretKey.fill(0)
+        return
+      }
+    }
+
+    if (attemptsSinceReport >= progressEvery) {
+      self.postMessage({
+        type: 'progress',
+        searchId: config.searchId,
+        attempts: attemptsSinceReport,
+      } satisfies WorkerOutboundMessage)
+      attemptsSinceReport = 0
+    }
   }
 
-  if (position === 'suffix') {
-    return new RegExp(start + '$', flags)
+  if (attemptsSinceReport > 0 && activeSearchId === config.searchId) {
+    self.postMessage({
+      type: 'progress',
+      searchId: config.searchId,
+      attempts: attemptsSinceReport,
+    } satisfies WorkerOutboundMessage)
   }
 
-  if (position === 'both') {
-    return new RegExp('^' + start + '|' + start + '$', flags)
-  }
-
-  if (position === 'bothEnds') {
-    return new RegExp('^' + start + '.*' + end + '$', flags)
-  }
-
-  if (position === 'anywhere') {
-    return new RegExp(start, flags)
-  }
-
-  return new RegExp('^' + start, flags)
+  self.postMessage({
+    type: 'cancelled',
+    searchId: config.searchId,
+  } satisfies WorkerOutboundMessage)
 }
 
-self.onmessage = async (event) => {
-  const pattern = event.data.pattern
-  const endPattern = event.data.endPattern || ''
-  const position = event.data.position
-  const ignoreCase = event.data.ignoreCase
+self.onmessage = async (event: MessageEvent<WorkerInboundMessage>) => {
+  const data = event.data
 
-  const matches = createMatchRegex(
-    pattern,
-    endPattern,
-    position,
-    ignoreCase
-  )
+  if (data.type === 'cancel') {
+    if (data.searchId === activeSearchId) {
+      cancelRequested = true
+    }
+    return
+  }
 
-  const startTime = Date.now()
+  if (data.type !== 'start') {
+    return
+  }
 
-  self.postMessage({
-    type: 'started',
-  })
+  activeSearchId = data.searchId
+  cancelRequested = false
 
-  const keyPair = await grindKeyPair({
-    matches,
-    extractable: true,
-  })
+  try {
+    await ensureWorkerEd25519(data.needsPolyfill)
 
-  const seconds =
-    (Date.now() - startTime) / 1000
+    self.postMessage({
+      type: 'ready',
+      searchId: data.searchId,
+    } satisfies WorkerOutboundMessage)
 
-  const publicKey = await getAddressFromPublicKey(
-    keyPair.publicKey
-  )
+    await grind({
+      searchId: data.searchId,
+      matchConfig: {
+        pattern: data.pattern,
+        endPattern: data.endPattern,
+        position: data.position,
+        caseSensitive: data.caseSensitive,
+      },
+      batchConcurrency: data.batchConcurrency,
+      progressEvery: data.progressEvery ?? DEFAULT_PROGRESS_EVERY,
+    })
+  } catch (error) {
+    if (cancelRequested || activeSearchId !== data.searchId) {
+      return
+    }
 
-  const pkcs8Bytes = new Uint8Array(
-    await crypto.subtle.exportKey(
-      'pkcs8',
-      keyPair.privateKey
-    )
-  )
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Address generation failed inside the worker.'
 
-  const publicKeyBytes = new Uint8Array(
-    await crypto.subtle.exportKey(
-      'raw',
-      keyPair.publicKey
-    )
-  )
-
-  const privateSeedBytes = pkcs8Bytes.slice(-32)
-
-  const secretKey = new Uint8Array(64)
-
-  secretKey.set(privateSeedBytes, 0)
-  secretKey.set(publicKeyBytes, 32)
-
-  const privateKey = bs58.encode(secretKey)
-
-  self.postMessage({
-    type: 'found',
-    publicKey,
-    privateKey,
-    secretKey: Array.from(secretKey),
-    seconds,
-    engine: 'solana-kit',
-  })
+    self.postMessage({
+      type: 'error',
+      searchId: data.searchId,
+      message,
+    } satisfies WorkerOutboundMessage)
+  }
 }
