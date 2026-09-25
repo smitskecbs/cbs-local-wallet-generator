@@ -1,31 +1,41 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <link rel="manifest" href="./manifest.json" />
-    <meta name="theme-color" content="#d86f00" />
-
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="./icon-512.png" />
+    <link rel="manifest" href="./manifest.json" />
+    <meta name="theme-color" content="#04060f" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./assets/app-icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Create custom Solana wallet addresses locally in your browser. Free, open source, no cloud key storage."
+      content="Create a custom Solana vanity address locally in your browser. Free, open source, no cloud key storage."
+    />
+    <!--
+      CSP note (GitHub Pages):
+      - 'wasm-unsafe-eval' reserved for optional future WASM; workers use blob:/module URLs from Vite.
+      - fonts.googleapis.com / fonts.gstatic.com for typography only.
+      - No analytics. No remote API calls for key generation.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
 
-    <title>CBS Local Wallet Generator</title>
-    <script type="module" crossorigin src="./assets/index-DJ753nO4.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-C-NRiFYx.css">
+    <title>Solana Address Generator</title>
+    <script type="module" crossorigin src="./assets/index-CG6a4Gc9.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CdVEEtLr.css">
   </head>
 
   <body>
-    <div id="app"></div>
-
+    <div class="page-bg" aria-hidden="true"></div>
+    <div id="app"></div>
   </body>
 </html>
